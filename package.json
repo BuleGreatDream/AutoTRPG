@@ -1,0 +1,18 @@
+{
+  "name": "ai-persona-chatroom",
+  "version": "1.0.0",
+  "description": "一对一 AI 人格化聊天室:人设卡、短期/长期记忆、联网搜索",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}

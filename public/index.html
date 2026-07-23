@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 人格化聊天室</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- 最左图标导航条 -->
+    <nav class="nav-rail">
+      <button class="nav-item active" data-view="chat" title="聊天室">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H8l-4 4V5a1 1 0 0 1 1-1z"/></svg>
+        <span class="nav-txt">聊天室</span>
+      </button>
+      <button class="nav-item" data-view="personas" title="人设卡">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-5 0-9 2.5-9 6v2h18v-2c0-3.5-4-6-9-6z"/></svg>
+        <span class="nav-txt">人设卡</span>
+      </button>
+      <button class="nav-item" data-view="kb" title="资料库">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="currentColor"><path d="M5 3h10a2 2 0 0 1 2 2v16l-7-3.5L3 21V5a2 2 0 0 1 2-2z"/></svg>
+        <span class="nav-txt">资料库</span>
+      </button>
+      <button class="nav-item" data-view="settings" title="设置">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm9 4a7 7 0 0 0-.13-1.3l2.05-1.6-2-3.46-2.42.98a7 7 0 0 0-2.25-1.3L15.5 2h-4l-.75 2.02a7 7 0 0 0-2.25 1.3l-2.42-.98-2 3.46 2.05 1.6A7 7 0 0 0 3 12c0 .44.05.87.13 1.3l-2.05 1.6 2 3.46 2.42-.98a7 7 0 0 0 2.25 1.3L11.5 22h4l.75-2.02a7 7 0 0 0 2.25-1.3l2.42.98 2-3.46-2.05-1.6c.08-.43.13-.86.13-1.3z"/></svg>
+        <span class="nav-txt">设置</span>
+      </button>
+    </nav>
+
+    <!-- 中栏：列表/导航，随板块切换 -->
+    <aside class="list-pane">
+      <!-- 聊天室 -->
+      <div class="pane-view" data-pane="chat">
+        <div class="section-label">人设</div>
+        <ul id="persona-list" class="persona-list"></ul>
+        <div class="section-label session-label">
+          <span>会话</span>
+          <button id="new-session-btn" class="icon-btn" title="新建会话" disabled>＋</button>
+        </div>
+        <ul id="session-list" class="session-list"></ul>
+        <div class="section-label">
+          <span>群聊</span>
+          <button id="new-group-btn" class="icon-btn" title="新建群聊">＋</button>
+        </div>
+        <ul id="group-list" class="session-list"></ul>
+      </div>
+
+      <!-- 人设卡管理 -->
+      <div class="pane-view hidden" data-pane="personas">
+        <div class="section-label">
+          <span>人设卡</span>
+          <button id="new-persona-btn" class="icon-btn" title="新建人设">＋</button>
+        </div>
+        <ul id="persona-manage-list" class="persona-list"></ul>
+      </div>
+
+      <!-- 资料库 -->
+      <div class="pane-view hidden" data-pane="kb">
+        <div class="section-label">
+          <span>分类</span>
+          <button id="new-category-btn" class="icon-btn" title="新建分类">＋</button>
+        </div>
+        <ul id="category-list" class="session-list"></ul>
+        <div class="section-label">
+          <span>条目</span>
+          <button id="new-entry-btn" class="icon-btn" title="新建条目">＋</button>
+        </div>
+        <ul id="entry-list" class="session-list"></ul>
+      </div>
+
+      <!-- 设置 -->
+      <div class="pane-view hidden" data-pane="settings">
+        <div class="section-label">设置</div>
+        <p class="pane-hint">在右侧配置大模型接口。</p>
+      </div>
+    </aside>
+
+    <!-- 右主区：随板块切换 -->
+    <main class="main">
+      <!-- 聊天室主区 -->
+      <div class="main-view" data-main="chat">
+        <header class="chat-head">
+          <div class="chat-head-info">
+            <div class="chat-title" id="chat-title">选择或创建一个人设开始聊天</div>
+            <div class="chat-status" id="chat-status"></div>
+          </div>
+          <div class="chat-head-right">
+            <button id="export-btn" class="btn-plain btn-sm hidden" title="导出群聊记录为 Markdown">导出</button>
+            <div class="badges" id="feature-badges"></div>
+          </div>
+        </header>
+        <div id="messages" class="messages">
+          <div class="empty-hint">左侧选择人设 → 新建会话 → 开始对话</div>
+        </div>
+        <footer class="composer">
+          <textarea id="input" placeholder="说点什么…（Enter 发送，Shift+Enter 换行）" rows="1" disabled></textarea>
+          <button id="send-btn" disabled>发送</button>
+        </footer>
+      </div>
+
+      <!-- 人设卡主区：右侧内联编辑 -->
+      <div class="main-view hidden" data-main="personas">
+        <div id="persona-editor" class="persona-editor hidden">
+          <div class="editor-head">
+            <h3 id="persona-editor-title">新建人设卡</h3>
+            <div class="spacer"></div>
+            <button id="persona-delete" class="btn-danger btn-sm hidden">删除</button>
+            <button id="persona-save" class="btn-primary btn-sm">保存</button>
+          </div>
+          <div class="persona-editor-body">
+            <div class="avatar-field">
+              <div id="avatar-preview" class="avatar-preview">＋</div>
+              <div class="avatar-field-info">
+                <button type="button" id="avatar-upload-btn" class="btn-plain">上传头像</button>
+                <button type="button" id="avatar-clear-btn" class="btn-plain hidden">移除</button>
+                <span class="field-hint">支持 JPG/PNG，会自动裁剪缩放。</span>
+              </div>
+              <input id="f-avatar-file" type="file" accept="image/*" class="hidden" />
+            </div>
+            <label>角色名字 <span class="req">*</span>
+              <input id="f-name" type="text" placeholder="例如：小林" />
+            </label>
+            <label>性格与身份
+              <textarea id="f-persona" rows="2" placeholder="活泼、好奇，是一名咖啡店店员…"></textarea>
+            </label>
+            <label>背景故事
+              <textarea id="f-background" rows="2" placeholder="来自一座海边小城…"></textarea>
+            </label>
+            <label>说话风格
+              <textarea id="f-style" rows="2" placeholder="语气轻快，爱用短句，偶尔卖萌…"></textarea>
+            </label>
+            <label>开场白
+              <textarea id="f-greeting" rows="2" placeholder="嗨，今天想聊点什么？"></textarea>
+            </label>
+            <label>补充设定
+              <textarea id="f-extra" rows="2" placeholder="其他任何设定…"></textarea>
+            </label>
+            <label>可读资料（资料库授权）</label>
+            <div id="persona-kb-list" class="kb-auth-list"></div>
+          </div>
+        </div>
+        <div id="persona-editor-empty" class="empty-hint">选择左侧人设卡进行编辑，或点＋新建一张。</div>
+      </div>
+
+      <!-- 资料库主区：条目编辑 -->
+      <div class="main-view hidden" data-main="kb">
+        <div id="entry-editor" class="entry-editor hidden">
+          <div class="editor-head">
+            <input id="entry-title" type="text" class="entry-title-input" placeholder="条目标题" />
+            <select id="entry-category" class="entry-category-select" title="所属分类"></select>
+            <button id="entry-save" class="btn-primary btn-sm">保存</button>
+          </div>
+          <textarea id="entry-content" class="entry-content-input" placeholder="在这里写下资料内容，AI 可按需检索引用…"></textarea>
+        </div>
+        <div id="entry-empty" class="empty-hint">从左侧选择或新建一个条目进行编辑。</div>
+      </div>
+
+      <!-- 设置主区 -->
+      <div class="main-view hidden" data-main="settings">
+        <div class="settings-form">
+          <h2 class="settings-title">大模型设置</h2>
+          <p class="field-hint">修改后保存会写入 .env 并立即生效（无需重启）。</p>
+          <label>接口地址 Base URL
+            <input id="s-baseurl" type="text" placeholder="https://api.deepseek.com/v1" />
+          </label>
+          <label>模型名 Model
+            <input id="s-model" type="text" placeholder="deepseek-v4-flash" />
+          </label>
+          <label>API Key
+            <input id="s-apikey" type="password" placeholder="留空则不修改现有密钥" autocomplete="off" />
+            <span class="field-hint" id="s-apikey-hint">当前状态：未知</span>
+          </label>
+          <div class="settings-foot">
+            <span class="settings-msg" id="s-msg"></span>
+            <button id="s-save" class="btn-primary">保存设置</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 删除确认弹窗（会话 / 群聊共用） -->
+  <div id="delete-modal" class="modal hidden">
+    <div class="modal-card modal-card-sm">
+      <div class="modal-head">
+        <h3 id="delete-title">删除会话</h3>
+        <button id="delete-close" class="icon-btn">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="delete-msg" id="delete-msg">删除这段会话前，是否把它归纳保留为该人设的长期记忆？</p>
+        <p class="delete-hint" id="delete-hint">选择「保留」会让 AI 记住这段对话的要点，跨会话延续。</p>
+      </div>
+      <div class="modal-foot">
+        <button id="delete-cancel" class="btn-plain">取消</button>
+        <div class="spacer"></div>
+        <button id="delete-plain" class="btn-danger">直接删除</button>
+        <button id="delete-keep" class="btn-primary">保留为长期记忆并删除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新建群聊弹窗 -->
+  <div id="group-modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3>新建群聊</h3>
+        <button id="group-close" class="icon-btn">✕</button>
+      </div>
+      <div class="modal-body">
+        <label>群聊名称 <span class="req">*</span>
+          <input id="g-name" type="text" placeholder="例如：周末去哪玩" />
+        </label>
+        <label>主题 / 场景
+          <textarea id="g-topic" rows="2" placeholder="例如：一群老同学的周末聚会群，正在商量去哪露营"></textarea>
+          <span class="field-hint">设定群聊的背景场景，AI 们会据此融入对话。可留空。</span>
+        </label>
+        <label>单次发言最多回应次数
+          <input id="g-max" type="number" min="1" max="10" value="3" />
+          <span class="field-hint">导演 AI 会在此上限内调度成员发言，防止无限循环。</span>
+        </label>
+        <label>选择成员 <span class="req">*</span>（至少 2 个）</label>
+        <ul id="group-member-list" class="member-select"></ul>
+      </div>
+      <div class="modal-foot">
+        <div class="spacer"></div>
+        <button id="group-create" class="btn-primary">创建</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

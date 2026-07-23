@@ -1,0 +1,17 @@
+{
+  "_comment": "表情包情绪映射。key 是表情包标识(同时是图片文件名去掉扩展名)，emotion 描述情绪含义供 AI 判断何时使用，file 是图片文件名。把对应图片放到本目录下即可。",
+  "stickers": [
+    { "id": "happy",      "emotion": "开心、愉悦、高兴",           "file": "happy.png" },
+    { "id": "laugh",      "emotion": "大笑、觉得好笑、哈哈",       "file": "laugh.png" },
+    { "id": "love",       "emotion": "喜欢、爱心、被感动、亲昵",   "file": "love.png" },
+    { "id": "shy",        "emotion": "害羞、不好意思、脸红",       "file": "shy.png" },
+    { "id": "sad",        "emotion": "难过、失落、委屈",           "file": "sad.png" },
+    { "id": "cry",        "emotion": "哭泣、很伤心、大哭",         "file": "cry.png" },
+    { "id": "angry",      "emotion": "生气、恼怒、不满",           "file": "angry.png" },
+    { "id": "surprised",  "emotion": "惊讶、震惊、意外",           "file": "surprised.png" },
+    { "id": "thinking",   "emotion": "思考、疑惑、好奇",           "file": "thinking.png" },
+    { "id": "wink",       "emotion": "俏皮、调皮、眨眼卖萌",       "file": "wink.png" },
+    { "id": "cool",       "emotion": "得意、酷、自信",             "file": "cool.png" },
+    { "id": "sleepy",     "emotion": "困、累、想睡觉",             "file": "sleepy.png" }
+  ]
+}
