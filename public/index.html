@@ -86,6 +86,7 @@
             <div class="chat-status" id="chat-status"></div>
           </div>
           <div class="chat-head-right">
+            <button id="group-kb-btn" class="btn-plain btn-sm hidden" title="设置群聊可读资料">资料</button>
             <button id="export-btn" class="btn-plain btn-sm hidden" title="导出群聊记录为 Markdown">导出</button>
             <div class="badges" id="feature-badges"></div>
           </div>
@@ -227,10 +228,31 @@
         </label>
         <label>选择成员 <span class="req">*</span>（至少 2 个）</label>
         <ul id="group-member-list" class="member-select"></ul>
+        <label>群聊可读资料</label>
+        <div id="group-kb-list" class="kb-auth-list"></div>
+        <span class="field-hint">群内成员在自身人设授权之外，还能一起读到这里勾选的资料。可留空。</span>
       </div>
       <div class="modal-foot">
         <div class="spacer"></div>
         <button id="group-create" class="btn-primary">创建</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 群聊资料授权（建群后随时修改）-->
+  <div id="group-kb-modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3>群聊可读资料</h3>
+        <button id="group-kb-close" class="icon-btn">✕</button>
+      </div>
+      <div class="modal-body">
+        <span class="field-hint">勾选本群成员可共同查阅的资料，与各成员自身人设的授权合并生效。</span>
+        <div id="group-kb-edit-list" class="kb-auth-list"></div>
+      </div>
+      <div class="modal-foot">
+        <div class="spacer"></div>
+        <button id="group-kb-save" class="btn-primary">保存</button>
       </div>
     </div>
   </div>

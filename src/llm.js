@@ -14,8 +14,9 @@ const toolHandlers = {
     return sticker ? { ok: true, sent: sticker.id } : { ok: false, error: '没有该表情包' };
   },
   search_knowledge: async (args, ctx) => {
-    if (!ctx?.personaId) return { error: '无资料库上下文。' };
-    return searchKnowledge(ctx.personaId, args.query || '');
+    if (!ctx?.personaId && !ctx?.groupId) return { error: '无资料库上下文。' };
+    // 检索范围 = 人设授权 ∪ 群聊授权
+    return searchKnowledge({ personaId: ctx.personaId, groupId: ctx.groupId }, args.query || '');
   },
   // create_file 真正的推送由 onFile 回调完成（在 streamChat 里），这里只做回执
   create_file: async (args, ctx) => {
@@ -24,13 +25,13 @@ const toolHandlers = {
   },
 };
 
-// personaId 为空时不挂知识工具（如无人设上下文的场景）
-function availableTools(personaId) {
+// 无人设/群聊上下文时不挂知识工具；有其一即按（人设 ∪ 群聊）授权挂载
+function availableTools(personaId, groupId) {
   const tools = [];
   if (features.webSearch) tools.push(webSearchTool);
   if (hasStickers) tools.push(buildStickerTool());
-  if (personaId) {
-    const kbTool = buildKnowledgeTool(personaId);
+  if (personaId || groupId) {
+    const kbTool = buildKnowledgeTool({ personaId, groupId });
     if (kbTool) tools.push(kbTool);
   }
   tools.push(buildFileTool()); // create_file 始终可用
@@ -128,13 +129,14 @@ async function streamOnce({ messages, tools, onToken }) {
  * @param {object[]} messages 初始消息（含 system）
  * @param {(token:string)=>void} onToken 文本增量回调
  * @param {(name:string, args:object)=>void} onToolCall 工具触发回调（用于前端提示）
- * @param {number} [personaId] 当前作答人设 id，用于挂载并隔离资料检索工具
+ * @param {number} [personaId] 当前作答人设 id，用于挂载资料检索工具
+ * @param {number} [groupId] 群聊 id（群聊场景），其授权与人设授权合并检索
  * @returns {Promise<string>} 最终 assistant 文本
  */
-export async function streamChat({ messages, onToken, onToolCall, onSticker, onFile, personaId }) {
+export async function streamChat({ messages, onToken, onToolCall, onSticker, onFile, personaId, groupId }) {
   assertChatConfig();
-  const tools = availableTools(personaId);
-  const toolCtx = { personaId };
+  const tools = availableTools(personaId, groupId);
+  const toolCtx = { personaId, groupId };
   const working = [...messages];
   const maxRounds = 4; // 防止无限工具循环
 

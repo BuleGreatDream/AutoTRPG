@@ -1,24 +1,44 @@
-import { personaKb } from './db.js';
+import { personaKb, groupKb } from './db.js';
 
 // 单次检索最多返回的条目数（防止一次塞太多正文）
 const MAX_HITS = 5;
 
 /**
- * 某人设是否有任何获授权的资料条目。
- * @param {number} personaId
+ * 汇总某次作答可读的资料条目：人设授权 ∪ 群聊授权，按 entry id 去重。
+ * 1v1 不传 groupId，只取人设授权；群聊传 groupId，两者合并。
+ * @param {{personaId?: number, groupId?: number}} ctx
+ * @returns {object[]} 去重后的条目（含 category_name），按分类+id 排序
  */
-export function hasKnowledge(personaId) {
-  return personaKb.entryIdsFor(personaId).length > 0;
+function authorizedEntries({ personaId, groupId } = {}) {
+  const byId = new Map();
+  if (personaId) {
+    for (const e of personaKb.listEntriesFor(personaId)) byId.set(e.id, e);
+  }
+  if (groupId) {
+    for (const e of groupKb.listEntriesFor(groupId)) byId.set(e.id, e);
+  }
+  // 稳定排序：分类升序、条目 id 升序
+  return [...byId.values()].sort(
+    (a, b) => (a.category_id - b.category_id) || (a.id - b.id)
+  );
+}
+
+/**
+ * 该次作答是否有任何可读的资料条目（人设 ∪ 群聊授权）。
+ * @param {{personaId?: number, groupId?: number}} ctx
+ */
+export function hasKnowledge(ctx) {
+  return authorizedEntries(ctx).length > 0;
 }
 
 /**
  * 构造暴露给模型的 search_knowledge 工具定义。
- * description 里列出该人设可读条目的**标题目录**，让模型知道有哪些资料可查。
- * @param {number} personaId
+ * description 里列出可读条目的**标题目录**（人设 ∪ 群聊授权），让模型知道有哪些资料可查。
+ * @param {{personaId?: number, groupId?: number}} ctx
  * @returns {object|null} 无授权条目时返回 null
  */
-export function buildKnowledgeTool(personaId) {
-  const entries = personaKb.listEntriesFor(personaId);
+export function buildKnowledgeTool(ctx) {
+  const entries = authorizedEntries(ctx);
   if (!entries.length) return null;
 
   // 标题目录：按分类聚合，帮助模型判断何时该查、查什么
@@ -49,13 +69,13 @@ export function buildKnowledgeTool(personaId) {
 }
 
 /**
- * 在该人设授权范围内按关键词检索资料，返回命中条目的正文。
+ * 在可读范围内（人设 ∪ 群聊授权）按关键词检索资料，返回命中条目的正文。
  * 简单的标题/正文子串匹配（不区分大小写）；query 为空则返回全部授权条目（截断到 MAX_HITS）。
- * @param {number} personaId
+ * @param {{personaId?: number, groupId?: number}} ctx
  * @param {string} query
  */
-export function searchKnowledge(personaId, query) {
-  const entries = personaKb.listEntriesFor(personaId);
+export function searchKnowledge(ctx, query) {
+  const entries = authorizedEntries(ctx);
   if (!entries.length) return { error: '该角色没有可查阅的资料。' };
 
   const q = String(query || '').trim().toLowerCase();

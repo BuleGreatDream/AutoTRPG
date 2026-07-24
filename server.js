@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { config, features } from './src/config.js';
-import { sessions, messages, groups, groupMessages, kbCategories, kbEntries, personaKb } from './src/db.js';
+import { sessions, messages, groups, groupMessages, kbCategories, kbEntries, personaKb, groupKb } from './src/db.js';
 import { updateEnvFile } from './src/env-file.js';
 import { getTempFile } from './src/files.js';
 import {
@@ -132,7 +132,7 @@ app.get('/api/groups', wrap((req, res) => {
 }));
 
 app.post('/api/groups', wrap((req, res) => {
-  const { name, topic, maxResponses, memberIds } = req.body || {};
+  const { name, topic, maxResponses, memberIds, kbEntryIds } = req.body || {};
   const ids = Array.isArray(memberIds) ? [...new Set(memberIds.map(Number).filter(Boolean))] : [];
   if (ids.length < 2) return res.status(400).json({ error: '群聊至少需要选择 2 个人设' });
   // 校验成员都存在
@@ -146,6 +146,11 @@ app.post('/api/groups', wrap((req, res) => {
     maxResponses: max,
     memberIds: ids,
   });
+  // 可选：建群同时设置群聊资料授权（只保留真实存在的条目）
+  if (Array.isArray(kbEntryIds) && kbEntryIds.length) {
+    const validKb = [...new Set(kbEntryIds.map(Number).filter(Boolean))].filter((eid) => kbEntries.get(eid));
+    if (validKb.length) groupKb.setFor(group.id, validKb);
+  }
   res.json({ ...group, members: groups.members(group.id).map(publicMember) });
 }));
 
@@ -317,6 +322,24 @@ app.put('/api/personas/:id/kb', wrap((req, res) => {
   // 只保留真实存在的条目 id
   const valid = ids.filter((eid) => kbEntries.get(eid));
   personaKb.setFor(id, valid);
+  res.json({ ok: true, entryIds: valid });
+}));
+
+// ===== 群聊→资料授权（与人设授权并列，检索时并集）=====
+app.get('/api/groups/:id/kb', wrap((req, res) => {
+  const id = Number(req.params.id);
+  if (!groups.get(id)) return res.status(404).json({ error: '群组不存在' });
+  res.json({ entryIds: groupKb.entryIdsFor(id) });
+}));
+
+app.put('/api/groups/:id/kb', wrap((req, res) => {
+  const id = Number(req.params.id);
+  if (!groups.get(id)) return res.status(404).json({ error: '群组不存在' });
+  const ids = Array.isArray(req.body?.entryIds)
+    ? [...new Set(req.body.entryIds.map(Number).filter(Boolean))]
+    : [];
+  const valid = ids.filter((eid) => kbEntries.get(eid));
+  groupKb.setFor(id, valid);
   res.json({ ok: true, entryIds: valid });
 }));
 

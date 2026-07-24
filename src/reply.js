@@ -15,9 +15,10 @@ export const MAX_STICKERS_PER_REPLY = 1;
  * @param {(sticker:object)=>void} [onSticker] 触发表情包时回调（已受上限约束）
  * @param {(name:string,args:object)=>void} [onToolCall] 工具调用回调（如联网搜索提示）
  * @param {number} [personaId] 作答人设 id，用于挂载资料检索工具
+ * @param {number} [groupId] 群聊 id（群聊场景），其授权与人设授权合并检索
  * @param {number} [maxStickers] 本次回应的表情包上限
  */
-export async function streamReply({ messages, onSentence, onSticker, onToolCall, onFile, personaId, maxStickers = MAX_STICKERS_PER_REPLY }) {
+export async function streamReply({ messages, onSentence, onSticker, onToolCall, onFile, personaId, groupId, maxStickers = MAX_STICKERS_PER_REPLY }) {
   const segmenter = new SentenceSegmenter();
   let stickerCount = 0;
 
@@ -29,6 +30,7 @@ export async function streamReply({ messages, onSentence, onSticker, onToolCall,
   await streamChat({
     messages,
     personaId,
+    groupId,
     onToken: (token) => {
       for (const s of segmenter.push(token)) flushSentence(s);
     },

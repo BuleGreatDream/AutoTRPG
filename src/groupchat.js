@@ -180,6 +180,7 @@ export async function handleGroupMessage(groupId, userText, handlers = {}) {
     await streamReply({
       messages: context,
       personaId,
+      groupId,
       onSentence: (text) => {
         groupMessages.add({ groupId, role: 'assistant', content: text, speakerPersonaId: personaId });
         onSegment?.(text, speaker);

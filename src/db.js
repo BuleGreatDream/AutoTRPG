@@ -85,6 +85,12 @@ db.exec(`
     entry_id   INTEGER NOT NULL REFERENCES kb_entries(id) ON DELETE CASCADE,
     PRIMARY KEY (persona_id, entry_id)
   );
+  -- 群聊→条目授权：与 persona_kb 并列，检索时两者取并集（群成员可读 = 自身人设授权 ∪ 群授权）
+  CREATE TABLE IF NOT EXISTS group_kb (
+    group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    entry_id INTEGER NOT NULL REFERENCES kb_entries(id) ON DELETE CASCADE,
+    PRIMARY KEY (group_id, entry_id)
+  );
 
   CREATE INDEX IF NOT EXISTS idx_sessions_persona ON sessions(persona_id);
   CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
@@ -92,6 +98,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_group_messages_group ON group_messages(group_id);
   CREATE INDEX IF NOT EXISTS idx_kb_entries_category ON kb_entries(category_id);
   CREATE INDEX IF NOT EXISTS idx_persona_kb_persona ON persona_kb(persona_id);
+  CREATE INDEX IF NOT EXISTS idx_group_kb_group ON group_kb(group_id);
 `);
 
 // 兼容旧库：groups 表若无 topic 列则补上（幂等，已存在会抛错，忽略即可）
@@ -367,6 +374,41 @@ export const personaKb = {
          WHERE pk.persona_id = ? ORDER BY e.category_id ASC, e.id ASC`
       )
       .all(personaId);
+  },
+};
+
+// ===== 资料库：群聊→条目授权（与 personaKb 结构对等，检索时两者并集）=====
+export const groupKb = {
+  // 该群已授权的条目 id 列表
+  entryIdsFor(groupId) {
+    return db
+      .prepare('SELECT entry_id FROM group_kb WHERE group_id = ?')
+      .all(groupId)
+      .map((r) => r.entry_id);
+  },
+  // 全量覆盖授权（先清空再插入，手动事务保证原子性）
+  setFor(groupId, entryIds) {
+    const ins = db.prepare('INSERT OR IGNORE INTO group_kb (group_id, entry_id) VALUES (?, ?)');
+    db.exec('BEGIN');
+    try {
+      db.prepare('DELETE FROM group_kb WHERE group_id = ?').run(groupId);
+      for (const eid of entryIds) ins.run(groupId, eid);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  },
+  // 该群可读的条目（join 出标题/正文/分类），按分类+id 排序
+  listEntriesFor(groupId) {
+    return db
+      .prepare(
+        `SELECT e.*, c.name AS category_name FROM group_kb gk
+         JOIN kb_entries e ON e.id = gk.entry_id
+         LEFT JOIN kb_categories c ON c.id = e.category_id
+         WHERE gk.group_id = ? ORDER BY e.category_id ASC, e.id ASC`
+      )
+      .all(groupId);
   },
 };
 

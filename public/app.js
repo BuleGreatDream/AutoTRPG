@@ -54,6 +54,7 @@ const stickerPanel = $('sticker-panel');
 const newSessionBtn = $('new-session-btn');
 const featureBadges = $('feature-badges');
 const exportBtn = $('export-btn');
+const groupKbBtn = $('group-kb-btn');
 
 // ===== API 封装 =====
 const api = {
@@ -208,7 +209,8 @@ async function selectPersona(id) {
   renderGroups();
   clearMessages('从上方新建一个会话开始对话');
   disableComposer();
-  exportBtn.classList.add('hidden'); // 选人设(未进群)隐藏导出按钮
+  exportBtn.classList.add('hidden'); // 选人设(未进群)隐藏导出/资料按钮
+  groupKbBtn.classList.add('hidden');
   await loadSessions();
 }
 
@@ -301,6 +303,7 @@ async function performDelete(summarize) {
       clearMessages(cfg.doneMsg);
       disableComposer();
       exportBtn.classList.add('hidden');
+      groupKbBtn.classList.add('hidden');
     }
     closeDeleteModal();
     await loadGroups();
@@ -325,7 +328,8 @@ async function selectSession(id) {
   chatTitle.textContent = persona ? persona.name : '会话';
   renderSessions();
   enableComposer();
-  exportBtn.classList.add('hidden'); // 单聊隐藏导出按钮
+  exportBtn.classList.add('hidden'); // 单聊隐藏导出/资料按钮
+  groupKbBtn.classList.add('hidden');
   const msgs = await api.get(`/api/sessions/${id}/messages`);
   renderMessages(msgs, personaSpeaker(persona));
 }
@@ -381,7 +385,8 @@ async function selectGroup(id) {
   renderSessions();
   renderGroups();
   enableComposer();
-  exportBtn.classList.remove('hidden'); // 群聊模式显示导出按钮
+  exportBtn.classList.remove('hidden'); // 群聊模式显示导出/资料按钮
+  groupKbBtn.classList.remove('hidden');
   const msgs = await api.get(`/api/groups/${id}/messages`);
   renderMessages(msgs);
 }
@@ -394,6 +399,28 @@ function exportCurrentGroup() {
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+// 打开当前群聊的「可读资料」授权弹窗（建群后随时修改）
+async function openGroupKbModal() {
+  if (state.activeMode !== 'group' || !state.activeGroupId) return;
+  let authorized = [];
+  try { authorized = (await api.get(`/api/groups/${state.activeGroupId}/kb`)).entryIds || []; } catch { /* 忽略 */ }
+  await renderKbAuthList($('group-kb-edit-list'), authorized, 'gkbe');
+  showModal('group-kb-modal');
+}
+
+// 保存群聊资料授权（按条目全量覆盖）
+async function saveGroupKb() {
+  if (!state.activeGroupId) return;
+  const entryIds = collectKbAuthIds($('group-kb-edit-list'));
+  try {
+    await api.send('PUT', `/api/groups/${state.activeGroupId}/kb`, { entryIds });
+  } catch (err) {
+    alert(err.message || '保存失败');
+    return;
+  }
+  hideModal('group-kb-modal');
 }
 
 // ===== 已读 & 输入中 =====
@@ -770,20 +797,16 @@ function closePersonaEditor() {
   renderPersonaManageList();
 }
 
-// 在人设编辑器里渲染「可读资料」：按分类分组，组内条目复选。editing 为 null(新建)时全不选
-async function renderPersonaKbList(personaId) {
-  const box = $('persona-kb-list');
+// [复用] 在给定容器里渲染「可读资料」复选：按分类分组，组内条目复选。
+// authorizedIds 为已勾选的条目 id 数组；idPrefix 用于 checkbox 元素 id，避免多处渲染冲突。
+// 读取勾选用 collectKbAuthIds(box)。人设授权与群聊授权共用。
+async function renderKbAuthList(box, authorizedIds = [], idPrefix = 'kb') {
   box.innerHTML = '<div class="kb-auth-empty">加载中…</div>';
   try {
     const [entries, cats] = await Promise.all([
       api.get('/api/kb/entries'),      // 全部条目（含 category_name）
       api.get('/api/kb/categories'),
     ]);
-    let authorized = [];
-    if (personaId) {
-      const r = await api.get(`/api/personas/${personaId}/kb`);
-      authorized = r.entryIds || [];
-    }
     box.innerHTML = '';
     if (!entries.length) {
       box.innerHTML = '<div class="kb-auth-empty">资料库还没有条目，可先去「资料库」添加。</div>';
@@ -810,11 +833,11 @@ async function renderPersonaKbList(personaId) {
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.value = e.id;
-        cb.id = `pkb-${e.id}`;
-        cb.checked = authorized.includes(e.id);
+        cb.id = `${idPrefix}-${e.id}`;
+        cb.checked = authorizedIds.includes(e.id);
         const label = document.createElement('label');
         label.textContent = e.title;
-        label.htmlFor = `pkb-${e.id}`;
+        label.htmlFor = `${idPrefix}-${e.id}`;
         label.style.margin = '0';
         label.style.cursor = 'pointer';
         label.style.flex = '1';
@@ -826,6 +849,20 @@ async function renderPersonaKbList(personaId) {
   } catch {
     box.innerHTML = '<div class="kb-auth-empty">资料加载失败</div>';
   }
+}
+
+// [复用] 从授权复选容器收集勾选的条目 id
+function collectKbAuthIds(box) {
+  return [...box.querySelectorAll('input[type="checkbox"]:checked')].map((cb) => Number(cb.value));
+}
+
+// 在人设编辑器里渲染「可读资料」勾选。editing 为 null(新建)时全不选
+async function renderPersonaKbList(personaId) {
+  let authorized = [];
+  if (personaId) {
+    try { authorized = (await api.get(`/api/personas/${personaId}/kb`)).entryIds || []; } catch { /* 忽略 */ }
+  }
+  await renderKbAuthList($('persona-kb-list'), authorized, 'pkb');
 }
 
 // 在弹窗里显示头像预览（src 为 data URL 或路径，空则显示占位）
@@ -909,8 +946,7 @@ async function savePersona() {
   }
 
   // 保存可读资料授权（按条目全量覆盖）
-  const entryIds = [...$('persona-kb-list').querySelectorAll('input[type="checkbox"]:checked')]
-    .map((cb) => Number(cb.value));
+  const entryIds = collectKbAuthIds($('persona-kb-list'));
   try {
     await api.send('PUT', `/api/personas/${personaId}/kb`, { entryIds });
   } catch { /* 资料库可能为空，忽略 */ }
@@ -969,6 +1005,8 @@ function openGroupModal() {
       list.appendChild(li);
     }
   }
+  // 群聊可读资料复选（新建时全不选）
+  renderKbAuthList($('group-kb-list'), [], 'gkb');
   showModal('group-modal');
 }
 
@@ -984,8 +1022,9 @@ async function createGroup() {
   const memberIds = [...$('group-member-list').querySelectorAll('input[type="checkbox"]:checked')]
     .map((cb) => Number(cb.value));
   if (memberIds.length < 2) { alert('群聊至少选择 2 个人设'); return; }
+  const kbEntryIds = collectKbAuthIds($('group-kb-list'));
 
-  const group = await api.send('POST', '/api/groups', { name, topic, maxResponses, memberIds });
+  const group = await api.send('POST', '/api/groups', { name, topic, maxResponses, memberIds, kbEntryIds });
   closeGroupModal();
   await loadGroups();
   selectGroup(group.id);
@@ -1222,6 +1261,12 @@ function bindEvents() {
   $('group-close').onclick = closeGroupModal;
   $('group-create').onclick = createGroup;
   bindModalBackdrop('group-modal', closeGroupModal);
+
+  // 群聊资料授权弹窗
+  groupKbBtn.onclick = openGroupKbModal;
+  $('group-kb-save').onclick = saveGroupKb;
+  $('group-kb-close').onclick = () => hideModal('group-kb-modal');
+  bindModalBackdrop('group-kb-modal', () => hideModal('group-kb-modal'));
 
   // 删除会话弹窗
   $('delete-keep').onclick = () => performDelete(true);
