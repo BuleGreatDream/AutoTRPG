@@ -5,13 +5,22 @@ import { parseStickerContent } from './stickers.js';
 
 /**
  * 短期记忆：取该会话最近 N 条消息，转成 chat 格式。
- * 表情包消息只是给用户看的，不喂给模型。
+ * 表情包消息：AI 自己发的（assistant）不回喂给模型；用户发的（user）翻译成
+ * 「[我发送了一个表情：情绪]」文本，好让模型理解并自然回应用户的表情包。
  */
 export function shortTerm(sessionId) {
   const recent = messages.recent(sessionId, config.memory.shortTermMessages);
-  return recent
-    .filter((m) => !parseStickerContent(m.content))
-    .map((m) => ({ role: m.role, content: m.content }));
+  const out = [];
+  for (const m of recent) {
+    const sticker = parseStickerContent(m.content);
+    if (!sticker) {
+      out.push({ role: m.role, content: m.content });
+    } else if (m.role === 'user') {
+      out.push({ role: 'user', content: `[我发送了一个表情：${sticker.emotion || sticker.id}]` });
+    }
+    // assistant 自己发的表情包不回喂给模型
+  }
+  return out;
 }
 
 /**

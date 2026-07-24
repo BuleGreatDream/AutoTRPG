@@ -15,7 +15,7 @@ import { streamReply } from './reply.js';
  * @returns {Promise<string>} 最终 assistant 文本
  */
 export async function handleUserMessage(sessionId, userText, handlers = {}) {
-  const { onSegment, onToolCall, onSticker, onFile } = handlers;
+  const { onSegment, onToolCall, onSticker, onFile, stickerId } = handlers;
 
   const session = sessions.get(sessionId);
   if (!session) throw new Error('会话不存在');
@@ -23,8 +23,12 @@ export async function handleUserMessage(sessionId, userText, handlers = {}) {
   const persona = getPersona(session.persona_id);
   if (!persona) throw new Error('人设不存在');
 
-  // 1. 先落库用户消息
-  messages.add({ sessionId, role: 'user', content: userText });
+  // 1. 先落库用户消息：可以是纯文本，也可以是一个表情包（复用 AI 表情包的落库标记）
+  messages.add({
+    sessionId,
+    role: 'user',
+    content: stickerId ? stickerContent(stickerId) : userText,
+  });
 
   // 2. 组装上下文：system 人设 + 长期记忆摘要 + 短期窗口
   const systemPrompt = buildSystemPrompt(persona.card);

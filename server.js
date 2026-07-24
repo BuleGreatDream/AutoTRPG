@@ -17,7 +17,7 @@ import {
 import { personas as personasDao } from './src/db.js';
 import { handleUserMessage } from './src/chat.js';
 import { handleGroupMessage } from './src/groupchat.js';
-import { hasStickers, stickerCount } from './src/stickers.js';
+import { hasStickers, stickerCount, stickerCatalog, getSticker } from './src/stickers.js';
 import { summarizeSession, summarizeGroup } from './src/memory.js';
 import { runSSE } from './src/sse.js';
 import { contentView, publicMember, publicSpeaker, groupTranscriptMarkdown } from './src/serialize.js';
@@ -42,6 +42,11 @@ app.get('/api/features', (req, res) => {
     stickers: hasStickers,
     groupChat: true,
   });
+});
+
+// 表情包目录：供前端表情选择器渲染（id/file/emotion）
+app.get('/api/stickers', (req, res) => {
+  res.json(stickerCatalog());
 });
 
 // ===== 人设卡 =====
@@ -194,16 +199,21 @@ app.get('/api/groups/:id/export', wrap((req, res) => {
 }));
 
 app.post('/api/group-chat', wrap(async (req, res) => {
-  const { groupId, message } = req.body || {};
-  if (!groupId || !message || !message.trim()) {
-    return res.status(400).json({ error: '缺少 groupId 或 message' });
+  const { groupId, message, stickerId } = req.body || {};
+  // 允许两种发言：纯文本，或一个表情包（stickerId）
+  if (stickerId && !getSticker(stickerId)) {
+    return res.status(400).json({ error: '表情包不存在' });
+  }
+  if (!groupId || (!stickerId && (!message || !message.trim()))) {
+    return res.status(400).json({ error: '缺少 groupId 或 message/stickerId' });
   }
   if (!groups.get(Number(groupId))) {
     return res.status(404).json({ error: '群组不存在' });
   }
 
   await runSSE(res, (send) =>
-    handleGroupMessage(Number(groupId), message.trim(), {
+    handleGroupMessage(Number(groupId), message?.trim() || '', {
+      stickerId: stickerId || null,
       onSpeakerStart: (speaker) => send('speaker', speaker),
       onSegment: (text, speaker) => send('segment', { text, speaker }),
       onSticker: (sticker, speaker) =>
@@ -216,16 +226,21 @@ app.post('/api/group-chat', wrap(async (req, res) => {
 
 // ===== 聊天（SSE 流式）=====
 app.post('/api/chat', wrap(async (req, res) => {
-  const { sessionId, message } = req.body || {};
-  if (!sessionId || !message || !message.trim()) {
-    return res.status(400).json({ error: '缺少 sessionId 或 message' });
+  const { sessionId, message, stickerId } = req.body || {};
+  // 允许两种发言：纯文本，或一个表情包（stickerId）
+  if (stickerId && !getSticker(stickerId)) {
+    return res.status(400).json({ error: '表情包不存在' });
+  }
+  if (!sessionId || (!stickerId && (!message || !message.trim()))) {
+    return res.status(400).json({ error: '缺少 sessionId 或 message/stickerId' });
   }
   if (!sessions.get(Number(sessionId))) {
     return res.status(404).json({ error: '会话不存在' });
   }
 
   await runSSE(res, (send) =>
-    handleUserMessage(Number(sessionId), message.trim(), {
+    handleUserMessage(Number(sessionId), message?.trim() || '', {
+      stickerId: stickerId || null,
       onSegment: (text) => send('segment', { text }),
       onToolCall: (name, args) => send('tool', { name, args }),
       onSticker: (sticker) => send('sticker', { id: sticker.id, file: sticker.file }),

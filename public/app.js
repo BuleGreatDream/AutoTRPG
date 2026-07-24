@@ -17,6 +17,8 @@ const state = {
   entries: [],           // 当前分类下的条目
   activeCategoryId: null,
   activeEntryId: null,
+  // 表情包
+  stickers: [],          // 表情包目录 [{id,file,emotion}]
 };
 
 // 删除弹窗针对会话/群聊的文案与接口差异（共用一个弹窗）
@@ -47,6 +49,8 @@ const chatTitle = $('chat-title');
 const chatStatus = $('chat-status');
 const inputEl = $('input');
 const sendBtn = $('send-btn');
+const stickerBtn = $('sticker-btn');
+const stickerPanel = $('sticker-panel');
 const newSessionBtn = $('new-session-btn');
 const featureBadges = $('feature-badges');
 const exportBtn = $('export-btn');
@@ -113,6 +117,11 @@ async function loadFeatures() {
       badge('表情包', f.stickers),
       badge('群聊', f.groupChat)
     );
+    // 表情包开启时拉取目录，供用户表情选择器渲染
+    if (f.stickers) {
+      try { state.stickers = await api.get('/api/stickers'); } catch { /* 忽略 */ }
+    }
+    if (!state.stickers.length) stickerBtn.classList.add('hidden');
   } catch { /* 忽略 */ }
 }
 
@@ -553,9 +562,11 @@ function scrollToBottom() {
 }
 
 // ===== 发送（SSE 流式）=====
-async function sendMessage() {
-  const text = inputEl.value.trim();
-  if (!text || state.sending) return;
+// sticker：可选，用户发送的表情包 {id,file,emotion}；传入时忽略文本框内容
+async function sendMessage(sticker = null) {
+  const text = sticker ? '' : inputEl.value.trim();
+  if (!sticker && !text) return;
+  if (state.sending) return;
   if (state.activeMode === 'single' && !state.activeSessionId) return;
   if (state.activeMode === 'group' && !state.activeGroupId) return;
   if (!state.activeMode) return;
@@ -567,13 +578,17 @@ async function sendMessage() {
 
   state.sending = true;
   sendBtn.disabled = true;
-  const userBubble = addBubble('user', text);
-  inputEl.value = '';
-  autoResize();
+  stickerBtn.disabled = true;
+  hideStickerPanel();
+  // 用户发言气泡：表情包用独立表情气泡，否则普通文字气泡
+  const userWrap = sticker
+    ? addStickerBubble('user', sticker)
+    : addBubble('user', text).parentElement;
+  if (!sticker) { inputEl.value = ''; autoResize(); }
 
   // 1) 短暂随机延迟后显示「已读」
   await randDelay();
-  addReadReceipt(userBubble.parentElement);
+  addReadReceipt(userWrap);
 
   // 2) 已读后再显示「对方正在输入…」并发起请求
   const defaultTypingName = isGroup ? '群成员' : chatTitle.textContent;
@@ -626,8 +641,8 @@ async function sendMessage() {
   try {
     const url = isGroup ? '/api/group-chat' : '/api/chat';
     const payload = isGroup
-      ? { groupId: state.activeGroupId, message: text }
-      : { sessionId: state.activeSessionId, message: text };
+      ? { groupId: state.activeGroupId, message: text, stickerId: sticker?.id || null }
+      : { sessionId: state.activeSessionId, message: text, stickerId: sticker?.id || null };
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -680,6 +695,7 @@ async function sendMessage() {
     hideTyping();
     state.sending = false;
     sendBtn.disabled = false;
+    if (state.stickers.length) stickerBtn.disabled = false;
     inputEl.focus();
   }
 }
@@ -688,15 +704,41 @@ async function sendMessage() {
 function enableComposer() {
   inputEl.disabled = false;
   sendBtn.disabled = false;
+  if (state.stickers.length) stickerBtn.disabled = false;
   inputEl.focus();
 }
 function disableComposer() {
   inputEl.disabled = true;
   sendBtn.disabled = true;
+  stickerBtn.disabled = true;
+  hideStickerPanel();
 }
 function autoResize() {
   inputEl.style.height = 'auto';
   inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + 'px';
+}
+
+// ===== 表情包选择器 =====
+function toggleStickerPanel() {
+  if (stickerPanel.classList.contains('hidden')) showStickerPanel();
+  else hideStickerPanel();
+}
+function hideStickerPanel() { stickerPanel.classList.add('hidden'); }
+function showStickerPanel() {
+  if (inputEl.disabled || !state.stickers.length) return;
+  // 首次打开时渲染网格
+  if (!stickerPanel.childElementCount) {
+    for (const s of state.stickers) {
+      const img = document.createElement('img');
+      img.className = 'sticker-choice';
+      img.src = `stickers/${s.file}`;
+      img.alt = s.emotion || s.id;
+      img.title = s.emotion || s.id;
+      img.onclick = () => { hideStickerPanel(); sendMessage(s); };
+      stickerPanel.appendChild(img);
+    }
+  }
+  stickerPanel.classList.remove('hidden');
 }
 
 // ===== 人设卡右侧内联编辑 =====
@@ -1190,13 +1232,19 @@ function bindEvents() {
 
   exportBtn.onclick = exportCurrentGroup;
 
-  sendBtn.onclick = sendMessage;
+  sendBtn.onclick = () => sendMessage();
   inputEl.addEventListener('input', autoResize);
   inputEl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
+  });
+
+  // 表情包选择器：点按钮开合，点某个表情即发送
+  stickerBtn.onclick = (e) => { e.stopPropagation(); toggleStickerPanel(); };
+  document.addEventListener('click', (e) => {
+    if (!stickerPanel.contains(e.target) && e.target !== stickerBtn) hideStickerPanel();
   });
 }
 

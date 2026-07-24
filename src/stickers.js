@@ -38,6 +38,11 @@ export function getSticker(id) {
   return stickers.find((s) => s.id === id) || null;
 }
 
+/** 面向前端表情选择器的精简目录（id/file/emotion）。 */
+export function stickerCatalog() {
+  return stickers.map((s) => ({ id: s.id, file: s.file, emotion: s.emotion }));
+}
+
 /**
  * 构造暴露给模型的 send_sticker 工具。
  * 把每个表情包的情绪含义写进 description，让模型按情绪挑选。

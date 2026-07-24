@@ -133,7 +133,7 @@ function memberContext(persona, members, transcript, topic) {
  * @param {object} handlers { onSpeakerStart(speaker), onSegment(text, speaker), onSticker(sticker, speaker), onToolCall }
  */
 export async function handleGroupMessage(groupId, userText, handlers = {}) {
-  const { onSpeakerStart, onSegment, onSticker, onToolCall, onFile } = handlers;
+  const { onSpeakerStart, onSegment, onSticker, onToolCall, onFile, stickerId } = handlers;
 
   const group = groups.get(groupId);
   if (!group) throw new Error('群组不存在');
@@ -141,8 +141,13 @@ export async function handleGroupMessage(groupId, userText, handlers = {}) {
   const members = groups.members(groupId);
   if (members.length < 2) throw new Error('群成员不足');
 
-  // 1. 落库用户消息
-  groupMessages.add({ groupId, role: 'user', content: userText, speakerPersonaId: null });
+  // 1. 落库用户消息：可以是纯文本，也可以是一个表情包（复用 AI 表情包的落库标记）
+  groupMessages.add({
+    groupId,
+    role: 'user',
+    content: stickerId ? stickerContent(stickerId) : userText,
+    speakerPersonaId: null,
+  });
 
   const maxResponses = group.max_responses || 3;
   const topic = group.topic || '';

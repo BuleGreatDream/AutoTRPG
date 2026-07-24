@@ -94,6 +94,12 @@
           <div class="empty-hint">左侧选择人设 → 新建会话 → 开始对话</div>
         </div>
         <footer class="composer">
+          <div id="sticker-panel" class="sticker-panel hidden"></div>
+          <button id="sticker-btn" class="sticker-btn" title="发送表情包" disabled aria-label="发送表情包">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
+            </svg>
+          </button>
           <textarea id="input" placeholder="说点什么…（Enter 发送，Shift+Enter 换行）" rows="1" disabled></textarea>
           <button id="send-btn" disabled>发送</button>
         </footer>

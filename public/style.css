@@ -422,6 +422,7 @@ body {
 
 /* ===== 输入区 ===== */
 .composer {
+  position: relative;
   border-top: 1px solid var(--border);
   background: var(--panel);
   padding: 12px 20px;
@@ -452,6 +453,54 @@ body {
   height: 40px;
 }
 #send-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* 表情包选择按钮 */
+.sticker-btn {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text-soft);
+  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+.sticker-btn svg { width: 22px; height: 22px; }
+.sticker-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.sticker-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* 表情包选择面板：悬浮在输入区上方 */
+.sticker-panel {
+  position: absolute;
+  bottom: 64px;
+  left: 20px;
+  right: 20px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 72px);
+  gap: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  z-index: 20;
+}
+.sticker-choice {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 4px;
+  transition: background 0.15s, transform 0.1s;
+}
+.sticker-choice:hover { background: var(--accent-soft); transform: scale(1.05); }
 
 /* ===== 弹窗 ===== */
 .modal {
