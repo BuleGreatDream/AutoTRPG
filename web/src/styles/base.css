@@ -1,0 +1,60 @@
+:root {
+  --bg: #f7f7f8;
+  --panel: #ffffff;
+  --border: #e6e6e9;
+  --text: #1f2023;
+  --text-soft: #8a8d93;
+  --accent: #4f7cff;
+  --accent-soft: #eef2ff;
+  --user-bubble: #4f7cff;
+  --ai-bubble: #f0f1f3;
+  --danger: #e5484d;
+  --radius: 12px;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app { display: flex; height: 100vh; }
+
+.spacer { flex: 1; }
+.btn-primary {
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.btn-danger {
+  border: 1px solid var(--danger);
+  background: transparent;
+  color: var(--danger);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.btn-plain {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-soft);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.btn-primary:disabled, .btn-danger:disabled, .btn-plain:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.hidden { display: none; }

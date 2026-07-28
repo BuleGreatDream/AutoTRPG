@@ -1,0 +1,63 @@
+/* ===== 弹窗 ===== */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal.hidden { display: none; }
+.modal-card {
+  background: var(--panel);
+  width: 480px;
+  max-width: 92vw;
+  max-height: 88vh;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-head h3 { font-size: 16px; }
+.modal-body { padding: 16px 20px; overflow-y: auto; }
+.modal-body label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-soft);
+  margin-bottom: 12px;
+}
+.req { color: var(--danger); }
+.modal-body input, .modal-body textarea {
+  width: 100%;
+  margin-top: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text);
+  resize: vertical;
+  outline: none;
+}
+.modal-body input:focus, .modal-body textarea:focus { border-color: var(--accent); }
+.modal-foot {
+  display: flex;
+  align-items: center;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  gap: 10px;
+}
+
+/* 删除会话弹窗 */
+.modal-card-sm { width: 420px; }
+.delete-msg { font-size: 14px; color: var(--text); line-height: 1.6; }
+.delete-hint { font-size: 12px; color: var(--text-soft); margin-top: 8px; line-height: 1.5; }
+.modal-foot .btn-primary:disabled { position: relative; }

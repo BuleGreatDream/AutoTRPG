@@ -23,10 +23,19 @@ import { runSSE } from './src/sse.js';
 import { contentView, publicMember, publicSpeaker, groupTranscriptMarkdown } from './src/serialize.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+// 开发模式判定：npm run dev:server 带了 --watch，npm start 不带。
+// 开发时跳过 dist 静态托管——前端由 Vite dev server（5173）提供，3001 只做 API。
+const isDev = process.argv.includes('--watch') || process.execArgv.includes('--watch');
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
-app.use(express.static(join(__dirname, 'public')));
+// 静态资源：
+// 生产模式（npm start）：dist 构建产物由 Express 单端口交付
+// 开发模式（npm run dev:server）：跳过 dist，前端由 Vite dev server（5173）提供
+if (!isDev) {
+  app.use(express.static(join(__dirname, 'dist')));
+}
+app.use('/stickers', express.static(join(__dirname, 'public', 'stickers')));
 
 // 包装异步路由的错误处理
 const wrap = (fn) => (req, res) => Promise.resolve(fn(req, res)).catch((err) => {

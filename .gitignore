@@ -1,4 +1,5 @@
 node_modules/
+dist/
 .env
 data/
 *.db
@@ -6,3 +7,4 @@ data/
 *.log
 .claude/
 截图/
+迁移流程/

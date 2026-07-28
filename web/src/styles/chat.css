@@ -1,0 +1,276 @@
+.chat-head {
+  height: 56px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+}
+.chat-head-info { display: flex; flex-direction: column; justify-content: center; gap: 1px; }
+.chat-title { font-weight: 600; font-size: 15px; }
+.chat-status {
+  font-size: 12px;
+  color: var(--text-soft);
+  min-height: 16px;
+  transition: opacity 0.2s;
+}
+.chat-status:empty { opacity: 0; }
+.chat-status.visible { opacity: 1; }
+
+.chat-head-right { display: flex; align-items: center; gap: 12px; }
+/* 头部小号按钮（导出等），复用 btn-plain 外观 */
+.btn-sm { padding: 5px 14px; font-size: 13px; }
+.btn-plain.btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+
+.badges { display: flex; gap: 6px; }
+.badge {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.badge.off { background: #f0f0f0; color: var(--text-soft); }
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.empty-hint {
+  margin: auto;
+  color: var(--text-soft);
+  font-size: 14px;
+}
+
+.msg { display: flex; max-width: 78%; align-items: flex-end; }
+.msg.user { align-self: flex-end; }
+.msg.assistant { align-self: flex-start; gap: 8px; }
+
+/* 已读回执：位于用户气泡左侧末端。
+   order:-1 把它排到气泡之前（.msg.user 是 flex 行），所以必须是 .msg.user 的直接子元素。
+   它由 v-if 一次性挂载，用 animation 而不是 transition——没有起始态可过渡。 */
+.msg.user .read-receipt {
+  order: -1;
+  font-size: 11px;
+  color: var(--text-soft);
+  margin-right: 6px;
+  white-space: nowrap;
+  align-self: flex-end;
+  margin-bottom: 2px;
+  flex-shrink: 0;
+  animation: receipt-in 0.25s ease-out both;
+}
+@keyframes receipt-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.bubble {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.msg.user .bubble {
+  background: var(--user-bubble);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+.msg.assistant .bubble {
+  background: var(--ai-bubble);
+  color: var(--text);
+  border-bottom-left-radius: 4px;
+}
+
+/* 表情包：独立成条，无气泡背景 */
+.msg .sticker {
+  width: 110px;
+  height: 110px;
+  object-fit: contain;
+}
+
+/* 文件下载卡片：风格与气泡一致 */
+.file-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 200px;
+  max-width: 280px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--panel);
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color 0.15s, background 0.15s;
+}
+.file-card:hover { border-color: var(--accent); background: var(--accent-soft); }
+.file-ico { width: 30px; height: 30px; color: var(--accent); flex-shrink: 0; }
+.file-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.file-name {
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-sub { font-size: 11px; color: var(--text-soft); }
+.file-dl { width: 18px; height: 18px; color: var(--text-soft); flex-shrink: 0; }
+.file-card:hover .file-dl { color: var(--accent); }
+
+.tool-hint {
+  align-self: flex-start;
+  font-size: 12px;
+  color: var(--text-soft);
+  background: var(--panel);
+  border: 1px dashed var(--border);
+  padding: 5px 10px;
+  border-radius: 8px;
+}
+
+.typing::after {
+  content: '▋';
+  animation: blink 1s steps(2) infinite;
+  color: var(--text-soft);
+}
+@keyframes blink { 0%,50% { opacity: 1; } 50.01%,100% { opacity: 0; } }
+
+/* 顶部“对方正在输入”省略号动画 */
+.chat-status .dots::after {
+  content: '';
+  animation: dots 1.4s steps(4, end) infinite;
+}
+@keyframes dots {
+  0% { content: ''; }
+  25% { content: '·'; }
+  50% { content: '··'; }
+  75% { content: '···'; }
+  100% { content: ''; }
+}
+
+/* ===== 输入区 ===== */
+.composer {
+  position: relative;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  padding: 12px 20px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+#input {
+  flex: 1;
+  resize: none;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  max-height: 140px;
+  outline: none;
+}
+#input:focus { border-color: var(--accent); }
+#send-btn {
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-size: 14px;
+  cursor: pointer;
+  height: 40px;
+}
+#send-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* 表情包选择按钮 */
+.sticker-btn {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text-soft);
+  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+.sticker-btn svg { width: 22px; height: 22px; }
+.sticker-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.sticker-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* 表情包选择面板：悬浮在输入区上方 */
+.sticker-panel {
+  position: absolute;
+  bottom: 64px;
+  left: 20px;
+  right: 20px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 72px);
+  gap: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  z-index: 20;
+}
+.sticker-choice {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 4px;
+  transition: background 0.15s, transform 0.1s;
+}
+.sticker-choice:hover { background: var(--accent-soft); transform: scale(1.05); }
+
+/* 头像圆圈（assistant 消息左侧） */
+.avatar-slot {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  align-self: flex-end;
+  background-color: var(--accent);
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.avatar-slot.spacer { visibility: hidden; }
+
+/* 气泡列：说话人名字 + 气泡/表情 纵向排列 */
+.bubble-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+
+.msg.assistant .speaker-name {
+  font-size: 12px;
+  color: var(--text-soft);
+  margin-left: 2px;
+}

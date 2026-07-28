@@ -1,0 +1,7 @@
+/* 样式入口。顺序有意义：base 里的变量与按钮、.hidden 等全局工具类必须最先加载。
+   内容从旧 public/style.css 按行区间原样拆出，规则未作改动（气泡/头像/表情包等聊天样式尤其保持原样）。 */
+@import './base.css';
+@import './layout.css';
+@import './chat.css';
+@import './forms.css';
+@import './modal.css';

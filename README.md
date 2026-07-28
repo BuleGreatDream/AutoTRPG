@@ -38,16 +38,28 @@
 - 存储:SQLite(Node 内置 `node:sqlite`,零原生编译)
 - 大模型:任意 OpenAI 兼容 `/chat/completions` 接口(DeepSeek / 通义 / Kimi / 智谱 / OpenAI 等)
 - 搜索:Tavily(可选)
-- 前端:原生 HTML/CSS/JS(四板块导航,无框架无构建)
+- 前端:Vue 3 + Vite（SPA，构建后由 Express 静态托管）
 
 ## 快速开始
 
 ```bash
 npm install
 cp .env.example .env   # Windows: copy .env.example .env
-# 编辑 .env,填入 OPENAI_BASE_URL / OPENAI_API_KEY / CHAT_MODEL
-npm start
+# 编辑 .env，填入 OPENAI_BASE_URL / OPENAI_API_KEY / CHAT_MODEL
+npm run build          # 构建前端
+npm start              # 启动服务（默认 http://127.0.0.1:3001）
 ```
+
+### 开发模式
+
+后端与前端分开启动，前端改动热更新（HMR）：
+
+```bash
+npm run dev:server     # 后端 3001，node --watch 自动重启
+npm run dev:web        # 前端 5173，Vite dev server + HMR
+```
+
+开 http://localhost:5173 开发，接口自动代理到 3001。
 
 打开 http://127.0.0.1:3001(端口由 `.env` 的 `PORT` 决定)。
 
@@ -112,7 +124,18 @@ npm start
 │   ├── serialize.js       面向前端的数据序列化
 │   ├── sse.js             SSE 流式响应工具
 │   └── env-file.js        .env 读改写(设置持久化)
+├── web/                  Vue 3 前端源码
+│   ├── index.html        入口 HTML
+│   └── src/
+│       ├── App.vue        三栏骨架
+│       ├── api/           API 封装 + 路径表
+│       ├── stores/        响应式状态（chat / personas / kb / settings）
+│       ├── composables/   useChatStream（SSE 流式）/ useAvatar
+│       ├── components/    NavRail / AvatarImg / MessageBubble / KbAuthList
+│       ├── views/         各板块中栏 + 主区 + 弹窗
+│       └── styles/        CSS 按 base / layout / chat / forms / modal 拆分
+├── dist/                  构建产物（npm run build → Express 托管）
+├── vite.config.js         Vite 配置（root:web，dev 代理到 3001）
 └── public/
-    ├── index.html / style.css / app.js   原生前端(四板块导航)
     └── stickers/          表情包图片 + stickers.json 情绪映射
 ```
