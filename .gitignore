@@ -5,3 +5,4 @@ data/
 *.db-journal
 *.log
 .claude/
+截图/

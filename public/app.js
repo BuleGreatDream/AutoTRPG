@@ -11,7 +11,7 @@ const state = {
   editingPersonaId: null, // 弹窗当前编辑的人设 id（null 表示新建）
   editingAvatar: undefined, // 人设弹窗里当前的头像值（data URL / 已有路径 / null 表示清除；undefined 表示未改动）
   deleteTarget: null, // 删除确认弹窗当前针对的目标 { kind:'session'|'group', id, name? }
-  sending: false,
+  sendingKeys: new Set(), // 正在流式回应中的会话/群聊 key（见 chatKey），按会话独立加锁
   // 资料库
   categories: [],
   entries: [],           // 当前分类下的条目
@@ -328,6 +328,7 @@ async function selectSession(id) {
   chatTitle.textContent = persona ? persona.name : '会话';
   renderSessions();
   enableComposer();
+  syncComposerLock(); // 该会话仍在流式回应中时保持锁定
   exportBtn.classList.add('hidden'); // 单聊隐藏导出/资料按钮
   groupKbBtn.classList.add('hidden');
   const msgs = await api.get(`/api/sessions/${id}/messages`);
@@ -338,6 +339,14 @@ async function selectSession(id) {
 function personaSpeaker(persona) {
   if (!persona) return { personaId: 'self', name: '', avatar: null };
   return { personaId: persona.id, name: persona.name, avatar: persona.avatar || null };
+}
+
+// [复用] 当前聊天上下文的唯一键：'single:12' / 'group:3'，未选中任何会话返回 null。
+// 用于把一次发送“绑定”到发起时的会话：切走后就不再往界面上渲染（详见 sendMessage）。
+function chatKey() {
+  if (state.activeMode === 'single' && state.activeSessionId) return `single:${state.activeSessionId}`;
+  if (state.activeMode === 'group' && state.activeGroupId) return `group:${state.activeGroupId}`;
+  return null;
 }
 
 // [复用] 说话人唯一键：用于判断“是否换人”（换人才显示头像/名字）。无说话人返回 null。
@@ -385,6 +394,7 @@ async function selectGroup(id) {
   renderSessions();
   renderGroups();
   enableComposer();
+  syncComposerLock(); // 该群聊仍在流式回应中时保持锁定
   exportBtn.classList.remove('hidden'); // 群聊模式显示导出/资料按钮
   groupKbBtn.classList.remove('hidden');
   const msgs = await api.get(`/api/groups/${id}/messages`);
@@ -593,17 +603,26 @@ function scrollToBottom() {
 async function sendMessage(sticker = null) {
   const text = sticker ? '' : inputEl.value.trim();
   if (!sticker && !text) return;
-  if (state.sending) return;
+  if (!state.activeMode) return;
   if (state.activeMode === 'single' && !state.activeSessionId) return;
   if (state.activeMode === 'group' && !state.activeGroupId) return;
-  if (!state.activeMode) return;
+
+  // 本次发送绑定的会话；用户切到别的会话/人设后 stillHere() 变 false，
+  // 之后只让后端继续落库，不再往（已经属于别人的）界面上渲染。
+  const myKey = chatKey();
+  if (state.sendingKeys.has(myKey)) return; // 同一会话不允许并发发送
+  let detached = false;
+  const stillHere = () => {
+    if (!detached && chatKey() !== myKey) detached = true; // 一旦切走就永久脱离，避免切回来时重复渲染
+    return !detached;
+  };
 
   // 首条消息时清空 hint
   if (messagesEl.querySelector('.empty-hint')) messagesEl.innerHTML = '';
 
   const isGroup = state.activeMode === 'group';
 
-  state.sending = true;
+  state.sendingKeys.add(myKey);
   sendBtn.disabled = true;
   stickerBtn.disabled = true;
   hideStickerPanel();
@@ -613,13 +632,15 @@ async function sendMessage(sticker = null) {
     : addBubble('user', text).parentElement;
   if (!sticker) { inputEl.value = ''; autoResize(); }
 
+  // 发起时的标题：切走后 chatTitle 会变成别的会话，所以先存下来
+  const defaultTypingName = isGroup ? '群成员' : chatTitle.textContent;
+
   // 1) 短暂随机延迟后显示「已读」
   await randDelay();
-  addReadReceipt(userWrap);
+  if (stillHere()) addReadReceipt(userWrap);
 
   // 2) 已读后再显示「对方正在输入…」并发起请求
-  const defaultTypingName = isGroup ? '群成员' : chatTitle.textContent;
-  showTyping(defaultTypingName);
+  if (stillHere()) showTyping(defaultTypingName);
 
   // 事件队列 + 消费循环：SSE 事件先入队，消费端按真人节奏一条条渲染
   const queue = [];
@@ -642,6 +663,8 @@ async function sendMessage(sticker = null) {
         continue;
       }
       const item = queue.shift();
+      // 已切到别的会话：只把队列排空，不渲染也不停顿（内容后端已逐句落库，切回来会重新拉取）
+      if (!stillHere()) continue;
       if (item.type === 'tool') {
         const scope = item.domains?.length ? `（限 ${item.domains.join('、')}）` : '';
         addToolHint(`🔍 正在联网搜索${scope}：${item.query}`);
@@ -719,11 +742,29 @@ async function sendMessage(sticker = null) {
     streamDone = true;
     notify();
     await consumer; // 等所有气泡按节奏渲染完再解锁输入
-    hideTyping();
-    state.sending = false;
-    sendBtn.disabled = false;
-    if (state.stickers.length) stickerBtn.disabled = false;
-    inputEl.focus();
+    state.sendingKeys.delete(myKey);
+    if (stillHere()) {
+      // 还在本会话：正常收尾解锁
+      hideTyping();
+      sendBtn.disabled = false;
+      if (state.stickers.length) stickerBtn.disabled = false;
+      inputEl.focus();
+    } else if (chatKey() === myKey) {
+      // 中途切走又切回来了：界面只有切走前那部分，重新拉取完整记录补齐
+      await reloadCurrentMessages();
+    }
+  }
+}
+
+// 重新拉取当前会话/群聊的完整消息列表（用于流式期间切走再切回的补齐）
+async function reloadCurrentMessages() {
+  if (state.activeMode === 'single' && state.activeSessionId) {
+    const persona = state.personas.find((p) => p.id === state.activePersonaId);
+    const msgs = await api.get(`/api/sessions/${state.activeSessionId}/messages`);
+    renderMessages(msgs, personaSpeaker(persona));
+  } else if (state.activeMode === 'group' && state.activeGroupId) {
+    const msgs = await api.get(`/api/groups/${state.activeGroupId}/messages`);
+    renderMessages(msgs);
   }
 }
 
@@ -739,6 +780,16 @@ function disableComposer() {
   sendBtn.disabled = true;
   stickerBtn.disabled = true;
   hideStickerPanel();
+}
+// 切换会话后按「该会话是否仍在流式回应中」决定发送按钮的锁定状态，
+// 并清掉上一个会话残留的「正在输入…」（chatStatus 在头部，不随消息区清空）。
+function syncComposerLock() {
+  const busy = state.sendingKeys.has(chatKey());
+  sendBtn.disabled = busy;
+  stickerBtn.disabled = busy || !state.stickers.length;
+  // 回到一个仍在回应中的会话：提示还在生成（内容会在结束后整体补齐）
+  if (busy) showTyping(state.activeMode === 'group' ? '群成员' : chatTitle.textContent);
+  else hideTyping();
 }
 function autoResize() {
   inputEl.style.height = 'auto';

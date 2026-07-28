@@ -171,7 +171,8 @@ export async function streamChat({ messages, onToken, onToolCall, onSticker, onF
             toolCtx.lastFile = meta;
             onFile?.(meta);
           }
-        } else {
+        } else if (call.function.name === 'web_search') {
+          // 仅联网搜索给前端提示；资料库检索(search_knowledge)静默进行，不显示过程
           onToolCall?.(call.function.name, args);
         }
 
