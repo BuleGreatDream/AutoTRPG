@@ -21,6 +21,9 @@ export const personas = reactive({
   avatarTouched: false,
   kbEntryIds: [],    // 该人设已授权的资料条目 id
   saving: false,
+  // 长期记忆（滚动摘要，每人设一条）。只能整体清空——归纳时新旧摘要已融合覆盖，
+  // 不保留来源会话，无法按会话删除。
+  memory: { summary: '', updatedAt: null, state: 'idle', clearing: false },
 });
 
 // 编辑器里当前该显示的头像：改过就用草稿，没改过就用列表里的原值
@@ -46,7 +49,9 @@ export async function openEditor(persona) {
   personas.avatarDraft = null;
   personas.avatarTouched = false;
   personas.kbEntryIds = [];
+  resetMemory();
   if (persona) {
+    loadMemory(persona.id); // 不 await：记忆是附属信息，不该拖慢编辑器打开
     try {
       const res = await api.get(endpoints.personaKb(persona.id));
       // 组件可能已切到别的人设，回来时确认还在编辑同一张卡再写入
@@ -64,6 +69,7 @@ export function closeEditor() {
   personas.avatarDraft = null;
   personas.avatarTouched = false;
   personas.kbEntryIds = [];
+  resetMemory();
 }
 
 export function setAvatar(dataUrl) {
@@ -105,6 +111,39 @@ export async function savePersona() {
     return id;
   } finally {
     personas.saving = false;
+  }
+}
+
+// ===== 长期记忆 =====
+function resetMemory() {
+  personas.memory = { summary: '', updatedAt: null, state: 'idle', clearing: false };
+}
+
+export async function loadMemory(personaId) {
+  personas.memory = { summary: '', updatedAt: null, state: 'loading', clearing: false };
+  try {
+    const res = await api.get(endpoints.personaMemory(personaId));
+    // 期间可能已切到别的人设，回来时确认还在编辑同一张卡再写入
+    if (personas.editingId !== personaId) return;
+    personas.memory = {
+      summary: res.summary || '', updatedAt: res.updatedAt || null,
+      state: 'ready', clearing: false,
+    };
+  } catch {
+    if (personas.editingId === personaId) personas.memory.state = 'error';
+  }
+}
+
+/** 清空该人设的全部长期记忆。调用方负责二次确认。 */
+export async function clearMemory(personaId) {
+  personas.memory.clearing = true;
+  try {
+    await api.send('DELETE', endpoints.personaMemory(personaId));
+    if (personas.editingId === personaId) {
+      personas.memory = { summary: '', updatedAt: null, state: 'ready', clearing: false };
+    }
+  } finally {
+    if (personas.memory) personas.memory.clearing = false;
   }
 }
 

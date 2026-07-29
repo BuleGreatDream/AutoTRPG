@@ -3,19 +3,23 @@ import { getPersona, buildSystemPrompt } from './persona.js';
 import { complete } from './llm.js';
 import { streamReply } from './reply.js';
 import { stickerContent, parseStickerContent } from './stickers.js';
-import { fileContent } from './files.js';
+import { fileContent, parseFileContent } from './files.js';
 
 // 拼给模型看的群聊上下文里，保留的最近消息条数
 const GROUP_HISTORY_LIMIT = 30;
 
 /**
  * 把一条群聊消息转成「谁说了什么」的文本行，供导演与成员理解上下文。
- * 表情包消息渲染成动作描述，避免把内部标记喂给模型。
+ * 表情包与文件消息都渲染成动作描述，避免把内部标记（\x01STICKER/\x01FILE）喂给模型
+ * ——模型会照抄标记格式把字面量当正文输出。
  */
 function lineOf(m) {
   const who = m.role === 'user' ? '用户' : (m.speaker_name || '某成员');
   const sticker = parseStickerContent(m.content);
-  const text = sticker ? `[发送了一个表情：${sticker.emotion || sticker.id}]` : m.content;
+  const file = parseFileContent(m.content);
+  let text = m.content;
+  if (sticker) text = `[发送了一个表情：${sticker.emotion || sticker.id}]`;
+  else if (file) text = `[发送了一个文件：${file.filename}]`;
   return `${who}：${text}`;
 }
 

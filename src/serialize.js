@@ -1,5 +1,7 @@
-// [复用模块] 面向前端的数据序列化：把 DB 行转成前端可直接渲染的结构。
-// 集中处理「表情包标记 vs 普通文本」与「群成员对外字段」两处到处重复的分支。
+// [复用模块] 消息内容的两类序列化：
+//   contentView   → 面向前端渲染（表情包/文件/文本三种 kind）
+//   modelText     → 面向模型与摘要/导出的自然语言文本（把内部标记翻成人话）
+// 集中处理「表情包标记 / 文件标记 / 普通文本」与「群成员对外字段」这些到处重复的分支。
 
 import { parseStickerContent } from './stickers.js';
 import { parseFileContent } from './files.js';
@@ -16,6 +18,34 @@ export function contentView(content) {
   const file = parseFileContent(content);
   if (file) return { kind: 'file', file };
   return { kind: 'text' };
+}
+
+/**
+ * [复用模块] 把一条消息的 content 翻成「喂给模型/摘要/导出」的自然语言文本。
+ *
+ * 内部标记（\x01STICKER: / \x01FILE:）绝不能原样下发给模型——模型会照抄格式，
+ * 把字面量当正文输出（连 UUID 一起抄），前端就会渲染出一串裸标记。
+ *
+ * @param {string} content 原始 DB content
+ * @param {object} [opts]
+ * @param {'user'|'assistant'} [opts.role] 说话人角色，决定第一人称措辞
+ * @param {string} [opts.who] 第三人称称呼（群聊转录用；给了就用它代替"我"）
+ * @returns {string|null} null 表示这条消息不必进上下文（assistant 自己发的表情包）
+ */
+export function modelText(content, { role = 'assistant', who = '' } = {}) {
+  const self = who || '我';
+  const sticker = parseStickerContent(content);
+  if (sticker) {
+    // assistant 自己发的表情包不回喂（原 shortTerm 行为），群聊转录里给了 who 则照常描述
+    if (role === 'assistant' && !who) return null;
+    return `[${self}发送了一个表情：${sticker.emotion || sticker.id}]`;
+  }
+  const file = parseFileContent(content);
+  if (file) {
+    // 只保留文件名，绝不暴露内部 id
+    return `[${self}发送了一个文件：${file.filename}]`;
+  }
+  return content;
 }
 
 /**
@@ -43,10 +73,14 @@ function fmtTime(ms) {
     `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-// 一条消息的 Markdown 内容：表情包渲染成斜体动作标注，其余为原文；内部换行补引用前缀
+// 一条消息的 Markdown 内容：表情包/文件渲染成斜体动作标注（说话人名字已在上方标题里，
+// 这里不重复带称呼），其余为原文；内部换行补引用前缀
 function mdQuote(m) {
   const sticker = parseStickerContent(m.content);
-  const text = sticker ? `*[表情：${sticker.emotion || sticker.id}]*` : m.content;
+  const file = parseFileContent(m.content);
+  let text = m.content;
+  if (sticker) text = `*[表情：${sticker.emotion || sticker.id}]*`;
+  else if (file) text = `*[文件：${file.filename}]*`;
   return text.split('\n').map((l) => `> ${l}`).join('\n');
 }
 

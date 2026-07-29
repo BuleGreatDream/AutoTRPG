@@ -2,7 +2,10 @@
 // 聊天室主区：头部 + 消息列表 + 输入区 + 三个弹窗（删除/建群/群资料）。
 // 取代旧 app.js 聊天相关所有 DOM 操作，SSE 流式逻辑在 useChatStream.js 里。
 import { ref, computed, nextTick, watch } from 'vue';
-import { chat, renderMessages, currentChatKey, isSending } from '../stores/chat.js';
+import {
+  chat, renderMessages, currentChatKey, isSending,
+  uploadGroupFiles, GROUP_FILE_ACCEPT,
+} from '../stores/chat.js';
 import { useChatStream } from '../composables/useChatStream.js';
 import MessageBubble from '../components/MessageBubble.vue';
 import DeleteModal from './DeleteModal.vue';
@@ -106,6 +109,43 @@ async function doSend(sticker = null) {
 
   await stream.send(text, sticker);
 }
+
+// ===== 群文件上传 =====
+// 选中的文本文件转成资料库条目并自动授权给本群，结果以一条系统提示气泡反馈（不落库）。
+const fileInputEl = ref(null);
+const uploading = ref(false);
+
+function pickGroupFiles() {
+  fileInputEl.value?.click();
+}
+
+async function onGroupFilesPicked(e) {
+  const files = [...(e.target.files || [])];
+  e.target.value = ''; // 允许重复选同一个文件
+  const groupId = chat.activeGroupId;
+  if (!files.length || !groupId) return;
+
+  uploading.value = true;
+  try {
+    const { ok, fail } = await uploadGroupFiles(groupId, files);
+    const parts = [];
+    if (ok.length) {
+      const cat = ok[0].category;
+      const names = ok.map((f) => f.name).join('、');
+      parts.push(`📄 已把 ${names} 存入资料库${cat ? `「${cat}」` : ''}，本群成员现在可以查阅`);
+    }
+    for (const f of fail) parts.push(`⚠️ ${f.name} 上传失败：${f.error}`);
+    // 只在仍停留在该群时提示，避免串到别的会话里
+    if (chat.activeMode === 'group' && chat.activeGroupId === groupId) {
+      for (const content of parts) {
+        chat.messages.push({ role: 'assistant', kind: 'tool', content });
+      }
+    }
+  } finally {
+    uploading.value = false;
+  }
+}
+
 // ===== 切会话时清理流 =====
 watch(currentChatKey, () => {
   if (stream) {
@@ -147,6 +187,20 @@ function autoResize(e) {
     <div class="chat-head-right">
       <!-- 群聊时显示资料/导出按钮 -->
       <template v-if="chat.activeMode === 'group'">
+        <input
+          ref="fileInputEl"
+          type="file"
+          multiple
+          :accept="GROUP_FILE_ACCEPT"
+          style="display: none"
+          @change="onGroupFilesPicked"
+        />
+        <button
+          class="btn-plain btn-sm"
+          :disabled="uploading"
+          title="上传文本文件，自动存入资料库并对本群开放"
+          @click="pickGroupFiles"
+        >{{ uploading ? '上传中…' : '上传文件' }}</button>
         <button class="btn-plain btn-sm" @click="groupKbGroupId = chat.activeGroupId">资料</button>
         <a class="btn-plain btn-sm" :href="`/api/groups/${chat.activeGroupId}/export`" style="text-decoration:none">导出</a>
       </template>

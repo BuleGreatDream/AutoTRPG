@@ -26,6 +26,16 @@ export const api = {
     if (!res.ok) throw await toError(res);
     return res.json();
   },
+  // 上传纯文本正文（群文件导入）。文件名走 query，body 直接是文本，无需 multipart。
+  async sendText(url, text) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      body: text,
+    });
+    if (!res.ok) throw await toError(res);
+    return res.json();
+  },
 };
 
 // 各板块的接口路径集中在此，避免散落在组件里拼字符串
@@ -35,6 +45,7 @@ export const endpoints = {
   personas: '/api/personas',
   persona: (id) => `/api/personas/${id}`,
   personaKb: (id) => `/api/personas/${id}/kb`,
+  personaMemory: (id) => `/api/personas/${id}/memory`,
   sessions: '/api/sessions',
   sessionsOf: (personaId) => `/api/sessions?personaId=${personaId}`,
   session: (id) => `/api/sessions/${id}`,
@@ -44,6 +55,7 @@ export const endpoints = {
   groupMessages: (id) => `/api/groups/${id}/messages`,
   groupExport: (id) => `/api/groups/${id}/export`,
   groupKb: (id) => `/api/groups/${id}/kb`,
+  groupFiles: (id, filename) => `/api/groups/${id}/files?filename=${encodeURIComponent(filename)}`,
   kbCategories: '/api/kb/categories',
   kbCategory: (id) => `/api/kb/categories/${id}`,
   kbEntries: '/api/kb/entries',

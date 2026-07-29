@@ -4,6 +4,16 @@ import { SentenceSegmenter } from './segmenter.js';
 // 每次回复最多推送的表情包数量（控制表情包频率）
 export const MAX_STICKERS_PER_REPLY = 1;
 
+// 模型照抄内部标记字面量的形态：可能带 \x01 前缀，也可能只有 FILE:{...} / STICKER:xxx。
+// 真实的文件/表情包消息由 onFile/onSticker 独立落库，正文里出现这种串一律是模仿，不是内容。
+const MARKER_MIMICRY = /\x01?(?:FILE:\s*\{[^}]*\}|STICKER:\s*[A-Za-z0-9_-]+)/g;
+
+/** 剥掉正文里被模型照抄出来的内部标记字面量。 */
+export function stripMarkerMimicry(text) {
+  if (!text.includes('FILE:') && !text.includes('STICKER:')) return text;
+  return text.replace(MARKER_MIMICRY, '').trim();
+}
+
 /**
  * 单个 assistant 的一次完整回应：流式生成 → 逐句切分 → 表情包上限。
  *
@@ -23,7 +33,11 @@ export async function streamReply({ messages, onSentence, onSticker, onToolCall,
   let stickerCount = 0;
 
   const flushSentence = (raw) => {
-    const text = raw.trim();
+    let text = raw.trim();
+    if (!text) return;
+    // 兜底：模型有时会照抄内部标记的字面量当正文输出（历史上下文里见过就学）。
+    // 这类文本一旦落库就渲染成一串裸标记，直接剥掉；剥完为空则整句丢弃。
+    text = stripMarkerMimicry(text);
     if (text) onSentence(text);
   };
 

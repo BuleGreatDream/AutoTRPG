@@ -4,7 +4,7 @@
 import { ref, computed } from 'vue';
 import {
   personas, editingAvatar, closeEditor, setAvatar, clearAvatar,
-  savePersona, deletePersona,
+  savePersona, deletePersona, clearMemory,
 } from '../stores/personas.js';
 import { resizeImageToDataUrl } from '../composables/useAvatar.js';
 import KbAuthList from '../components/KbAuthList.vue';
@@ -43,6 +43,27 @@ async function onSave() {
     closeEditor();
   } catch (err) {
     alert(err.message);
+  }
+}
+
+// 长期记忆的更新时间（"YYYY-MM-DD HH:mm"）
+const memoryTime = computed(() => {
+  const ms = personas.memory.updatedAt;
+  if (!ms) return '';
+  const d = new Date(ms);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+});
+
+async function onClearMemory() {
+  const id = personas.editingId;
+  if (!id) return;
+  const name = personas.draft.name || '该角色';
+  if (!confirm(`清空${name}的全部长期记忆？\n\n此操作不可撤销，之后 TA 将不再记得过往会话的要点。当前会话窗口内的短期记忆不受影响。`)) return;
+  try {
+    await clearMemory(id);
+  } catch (err) {
+    alert(err.message || '清空失败');
   }
 }
 
@@ -99,6 +120,32 @@ async function onDelete() {
       <label>可读资料（资料库授权）</label>
       <!-- key 保证换人设时重新拉取并重建勾选状态 -->
       <KbAuthList :key="personas.editingId ?? 'new'" v-model="personas.kbEntryIds" />
+
+      <!-- 长期记忆：仅已保存的人设有（新建卡还没有记忆） -->
+      <template v-if="personas.editingId">
+        <label>长期记忆
+          <span v-if="memoryTime" class="mem-time">更新于 {{ memoryTime }}</span>
+        </label>
+        <div class="mem-box">
+          <div v-if="personas.memory.state === 'loading'" class="mem-empty">加载中…</div>
+          <div v-else-if="personas.memory.state === 'error'" class="mem-empty">记忆读取失败</div>
+          <div v-else-if="!personas.memory.summary" class="mem-empty">
+            还没有长期记忆。删除会话时选择「保留」才会归纳生成。
+          </div>
+          <pre v-else class="mem-text">{{ personas.memory.summary }}</pre>
+        </div>
+        <div class="mem-actions">
+          <button
+            type="button"
+            class="btn-danger btn-sm"
+            :disabled="!personas.memory.summary || personas.memory.clearing"
+            @click="onClearMemory"
+          >{{ personas.memory.clearing ? '清空中…' : '清空全部记忆' }}</button>
+          <span class="field-hint">
+            记忆是一条滚动摘要，归纳时新旧内容已融合，无法按单个会话删除，只能整体清空。
+          </span>
+        </div>
+      </template>
     </div>
   </div>
   <div v-else class="empty-hint">选择左侧人设卡进行编辑，或点＋新建一张。</div>

@@ -199,6 +199,15 @@ export const memories = {
     const row = db.prepare('SELECT summary FROM memories WHERE persona_id = ?').get(personaId);
     return row ? row.summary : '';
   },
+  // 读取整行（含 updated_at），供「查看/清空记忆」界面展示；无记录返回 undefined
+  getRow(personaId) {
+    return db.prepare('SELECT * FROM memories WHERE persona_id = ?').get(personaId);
+  },
+  // 清空该人设的全部长期记忆（整行删除，而非置空串——下次归纳会重新 insert）
+  clear(personaId) {
+    const info = db.prepare('DELETE FROM memories WHERE persona_id = ?').run(personaId);
+    return info.changes > 0;
+  },
   // upsert 摘要
   setSummary(personaId, summary) {
     db.prepare(
@@ -291,6 +300,10 @@ export const kbCategories = {
   get(id) {
     return db.prepare('SELECT * FROM kb_categories WHERE id = ?').get(id);
   },
+  // 按名字精确查找（群文件导入时用来判断“该群的分类是否已存在”）
+  findByName(name) {
+    return db.prepare('SELECT * FROM kb_categories WHERE name = ? LIMIT 1').get(name);
+  },
   create({ name }) {
     const info = db
       .prepare('INSERT INTO kb_categories (name, created_at) VALUES (?, ?)')
@@ -320,6 +333,12 @@ export const kbEntries = {
   },
   get(id) {
     return db.prepare('SELECT * FROM kb_entries WHERE id = ?').get(id);
+  },
+  // 同分类下按标题精确查找（群文件重复上传时覆盖而非堆积同名条目）
+  findInCategory(categoryId, title) {
+    return db
+      .prepare('SELECT * FROM kb_entries WHERE category_id = ? AND title = ? LIMIT 1')
+      .get(categoryId, title);
   },
   create({ categoryId, title, content }) {
     const info = db
@@ -398,6 +417,11 @@ export const groupKb = {
       db.exec('ROLLBACK');
       throw err;
     }
+  },
+  // 增量授权：只新增不清空（群文件上传用，避免冲掉手工勾选的授权）
+  addFor(groupId, entryIds) {
+    const ins = db.prepare('INSERT OR IGNORE INTO group_kb (group_id, entry_id) VALUES (?, ?)');
+    for (const eid of entryIds) ins.run(groupId, eid);
   },
   // 该群可读的条目（join 出标题/正文/分类），按分类+id 排序
   listEntriesFor(groupId) {

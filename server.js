@@ -14,12 +14,13 @@ import {
   deletePersona,
   greetingOf,
 } from './src/persona.js';
-import { personas as personasDao } from './src/db.js';
+import { personas as personasDao, memories as memoriesDao } from './src/db.js';
 import { handleUserMessage } from './src/chat.js';
 import { handleGroupMessage } from './src/groupchat.js';
 import { hasStickers, stickerCount, stickerCatalog, getSticker } from './src/stickers.js';
 import { summarizeSession, summarizeGroup } from './src/memory.js';
 import { runSSE } from './src/sse.js';
+import { importGroupFile, TEXT_EXTS, MAX_CONTENT_BYTES } from './src/groupfile.js';
 import { contentView, publicMember, publicSpeaker, groupTranscriptMarkdown } from './src/serialize.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -334,6 +335,26 @@ app.put('/api/personas/:id/kb', wrap((req, res) => {
   res.json({ ok: true, entryIds: valid });
 }));
 
+// ===== 人设长期记忆：查看 / 清空 =====
+// 说明：记忆是「每人设一条滚动摘要」——归纳时把旧摘要与新会话全文融合后整体覆盖，
+// 不保留来源会话，因此只能整体清空，无法按会话删除。
+app.get('/api/personas/:id/memory', wrap((req, res) => {
+  const id = Number(req.params.id);
+  if (!getPersona(id)) return res.status(404).json({ error: '人设不存在' });
+  const row = memoriesDao.getRow(id);
+  res.json({
+    summary: row?.summary || '',
+    updatedAt: row?.updated_at || null,
+  });
+}));
+
+app.delete('/api/personas/:id/memory', wrap((req, res) => {
+  const id = Number(req.params.id);
+  if (!getPersona(id)) return res.status(404).json({ error: '人设不存在' });
+  const cleared = memoriesDao.clear(id);
+  res.json({ ok: true, cleared });
+}));
+
 // ===== 群聊→资料授权（与人设授权并列，检索时并集）=====
 app.get('/api/groups/:id/kb', wrap((req, res) => {
   const id = Number(req.params.id);
@@ -351,6 +372,41 @@ app.put('/api/groups/:id/kb', wrap((req, res) => {
   groupKb.setFor(id, valid);
   res.json({ ok: true, entryIds: valid });
 }));
+
+// ===== 群文件上传：文本文件 → 资料库条目 + 群授权 =====
+// body 直接收文本（Content-Type: text/plain），文件名走 query，避免引入 multipart 依赖。
+// limit 给到 2mb 留出余量，真正的大小校验在下面用 MAX_CONTENT_BYTES 做，好给出中文错误。
+app.post(
+  '/api/groups/:id/files',
+  express.text({ type: 'text/plain', limit: '2mb' }),
+  wrap((req, res) => {
+    const id = Number(req.params.id);
+    const group = groups.get(id);
+    if (!group) return res.status(404).json({ error: '群组不存在' });
+
+    const filename = String(req.query.filename || '').trim();
+    if (!filename) return res.status(400).json({ error: '缺少文件名' });
+
+    const ext = filename.includes('.') ? filename.split('.').pop().toLowerCase() : '';
+    if (ext && !TEXT_EXTS.includes(ext)) {
+      return res.status(400).json({ error: `不支持的文件类型 .${ext}，仅支持文本文件` });
+    }
+
+    const content = typeof req.body === 'string' ? req.body : '';
+    if (!content.trim()) return res.status(400).json({ error: '文件内容为空' });
+    if (Buffer.byteLength(content, 'utf-8') > MAX_CONTENT_BYTES) {
+      return res.status(413).json({ error: '文件过大（上限 1MB）' });
+    }
+
+    const { entry, category, created } = importGroupFile(id, filename, content);
+    res.json({
+      ok: true,
+      created,
+      entry: { id: entry.id, title: entry.title, categoryId: category.id },
+      category: { id: category.id, name: category.name },
+    });
+  })
+);
 
 // ===== 设置：大模型配置 =====
 app.get('/api/settings', (req, res) => {

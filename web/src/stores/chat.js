@@ -198,6 +198,43 @@ export async function loadMessagesForGroup(id) {
   }
 }
 
+// ===== 群文件上传 =====
+// 允许的扩展名与后端 groupfile.js TEXT_EXTS 保持一致
+export const GROUP_FILE_EXTS = ['txt', 'md', 'markdown', 'csv', 'log', 'json'];
+export const GROUP_FILE_ACCEPT = GROUP_FILE_EXTS.map((e) => `.${e}`).join(',');
+const GROUP_FILE_MAX_BYTES = 1024 * 1024; // 与后端 MAX_CONTENT_BYTES 一致
+
+function extOf(name) {
+  const i = String(name || '').lastIndexOf('.');
+  return i > 0 ? name.slice(i + 1).toLowerCase() : '';
+}
+
+/**
+ * 逐个上传文本文件到当前群的资料库（转成条目并授权给该群）。
+ * 单个文件失败不影响其余文件。
+ * @param {number} groupId
+ * @param {File[]} files
+ * @returns {Promise<{ok:{name:string,created:boolean,category:string}[], fail:{name:string,error:string}[]}>}
+ */
+export async function uploadGroupFiles(groupId, files) {
+  const ok = [];
+  const fail = [];
+  for (const file of files) {
+    try {
+      const ext = extOf(file.name);
+      if (ext && !GROUP_FILE_EXTS.includes(ext)) throw new Error(`不支持的文件类型 .${ext}`);
+      if (file.size > GROUP_FILE_MAX_BYTES) throw new Error('文件过大（上限 1MB）');
+      const text = await file.text();
+      if (!text.trim()) throw new Error('文件内容为空');
+      const res = await api.sendText(endpoints.groupFiles(groupId, file.name), text);
+      ok.push({ name: file.name, created: res.created, category: res.category?.name || '' });
+    } catch (err) {
+      fail.push({ name: file.name, error: err.message });
+    }
+  }
+  return { ok, fail };
+}
+
 // ===== 删除 =====
 export async function performDelete(summarize) {
   const t = chat.deleteTarget;

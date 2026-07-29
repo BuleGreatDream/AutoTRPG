@@ -106,6 +106,29 @@
 .kb-auth-item input { width: auto; margin: 0; cursor: pointer; }
 .kb-auth-empty { padding: 12px; font-size: 13px; color: var(--text-soft); text-align: center; }
 
+/* 长期记忆：摘要展示框 + 清空操作。外观与 .kb-auth-list 保持一致 */
+.mem-box {
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.mem-empty { padding: 12px; font-size: 13px; color: var(--text-soft); text-align: center; }
+/* 摘要是要点式多行文本，保留换行；用正文字体而非等宽，读起来更自然 */
+.mem-text {
+  margin: 0;
+  padding: 12px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.mem-time { margin-left: 8px; font-size: 12px; font-weight: normal; color: var(--text-soft); }
+.mem-actions { display: flex; align-items: flex-start; gap: 10px; margin-top: 8px; }
+.mem-actions .field-hint { margin-top: 6px; flex: 1; }
+
 /* 设置表单 */
 .settings-form { max-width: 520px; padding: 28px; display: flex; flex-direction: column; gap: 4px; }
 .settings-title { font-size: 18px; margin-bottom: 4px; }

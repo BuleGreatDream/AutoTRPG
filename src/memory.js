@@ -2,23 +2,24 @@ import { messages, memories, sessions, groups, groupMessages } from './db.js';
 import { config, features } from './config.js';
 import { complete } from './llm.js';
 import { parseStickerContent } from './stickers.js';
+import { parseFileContent } from './files.js';
+import { modelText } from './serialize.js';
 
 /**
  * 短期记忆：取该会话最近 N 条消息，转成 chat 格式。
- * 表情包消息：AI 自己发的（assistant）不回喂给模型；用户发的（user）翻译成
- * 「[我发送了一个表情：情绪]」文本，好让模型理解并自然回应用户的表情包。
+ *
+ * 内部标记一律经 modelText 翻成自然语言，绝不原样下发：
+ * - 表情包：AI 自己发的（assistant）不回喂；用户发的翻成「[我发送了一个表情：情绪]」。
+ * - 文件：翻成「[我发送了一个文件：文件名]」。曾经这里直接下发 \x01FILE:{...}，
+ *   模型会照抄该格式把字面量当正文输出（UUID 都一起抄），前端渲染出一串裸标记。
  */
 export function shortTerm(sessionId) {
   const recent = messages.recent(sessionId, config.memory.shortTermMessages);
   const out = [];
   for (const m of recent) {
-    const sticker = parseStickerContent(m.content);
-    if (!sticker) {
-      out.push({ role: m.role, content: m.content });
-    } else if (m.role === 'user') {
-      out.push({ role: 'user', content: `[我发送了一个表情：${sticker.emotion || sticker.id}]` });
-    }
-    // assistant 自己发的表情包不回喂给模型
+    const text = modelText(m.content, { role: m.role });
+    if (text === null) continue; // assistant 自己发的表情包不回喂给模型
+    out.push({ role: m.role, content: text });
   }
   return out;
 }
@@ -56,7 +57,9 @@ export async function summarizeSession(sessionId) {
   const session = sessions.get(sessionId);
   if (!session) return false;
 
-  // 取该会话全部消息，过滤掉表情包标记与非对话角色
+  // 取该会话全部消息，过滤掉表情包标记与非对话角色。
+  // 文件消息保留但翻成「[我发送了一个文件：xxx]」——发过什么文件是值得记住的，
+  // 但绝不能把 \x01FILE:{...} 原样塞进摘要（UUID 会进长期记忆并被模型学去照抄）。
   const all = messages.listBySession(sessionId);
   const toSummarize = all.filter(
     (m) => (m.role === 'user' || m.role === 'assistant') && !parseStickerContent(m.content)
@@ -64,7 +67,11 @@ export async function summarizeSession(sessionId) {
   if (!toSummarize.length) return false;
 
   const transcript = toSummarize
-    .map((m) => `${m.role === 'user' ? '用户' : '我'}：${m.content}`)
+    .map((m) => {
+      const who = m.role === 'user' ? '用户' : '我';
+      const file = parseFileContent(m.content);
+      return `${who}：${file ? `[${who}发送了一个文件：${file.filename}]` : m.content}`;
+    })
     .join('\n');
 
   const personaId = session.persona_id;
@@ -126,9 +133,11 @@ export async function summarizeGroup(groupId) {
   for (const me of members) {
     const transcript = dialogue
       .map((m) => {
-        if (m.role === 'user') return `用户：${m.content}`;
-        const speaker = m.speaker_persona_id === me.id ? '我' : (m.speaker_name || '某成员');
-        return `${speaker}：${m.content}`;
+        const who = m.role === 'user'
+          ? '用户'
+          : (m.speaker_persona_id === me.id ? '我' : (m.speaker_name || '某成员'));
+        const file = parseFileContent(m.content);
+        return `${who}：${file ? `[${who}发送了一个文件：${file.filename}]` : m.content}`;
       })
       .join('\n');
 
