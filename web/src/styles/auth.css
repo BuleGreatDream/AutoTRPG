@@ -1,0 +1,82 @@
+/* ===== 登录 / 注册 ===== */
+/* 全部沿用 base.css 的 CSS 变量，不引新色值。输入框与 .settings-form input 同规格。 */
+
+.auth-screen {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  padding: 24px;
+}
+
+.auth-card {
+  width: 360px;
+  max-width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 32px 28px 26px;
+}
+
+.auth-brand { text-align: center; margin-bottom: 22px; }
+/* 与 .nav-logo 同一个字形与主题色，保持品牌感一致 */
+.auth-logo { font-size: 26px; color: var(--accent); line-height: 1; }
+.auth-title { font-size: 18px; font-weight: 600; margin-top: 10px; }
+.auth-sub { font-size: 13px; color: var(--text-soft); margin-top: 5px; }
+
+.auth-card label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-soft);
+  margin-bottom: 14px;
+}
+.auth-card input {
+  width: 100%;
+  margin-top: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text);
+  outline: none;
+}
+.auth-card input:focus { border-color: var(--accent); }
+.auth-card input:disabled { background: var(--bg); }
+
+.auth-msg { display: block; margin-top: 6px; font-size: 12px; color: var(--text-soft); }
+.auth-msg.err { color: var(--danger); }
+
+.auth-submit { width: 100%; padding: 10px; margin-top: 4px; }
+
+.auth-switch {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+/* 文字按钮：没有边框与底色，只靠主题色区分 */
+.auth-switch button {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+}
+.auth-switch button:hover { text-decoration: underline; }
+
+/* 中栏底部的当前账号与退出（设置板块）。
+   .auth-foot 靠 margin-top:auto 压到底，需要 .pane-view 撑满中栏高度，
+   故给设置板块的 pane-view 单独加 .pane-view-fill。 */
+.pane-view-fill { flex: 1; }
+.auth-foot {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.auth-foot-user { font-size: 13px; color: var(--text); margin-bottom: 8px; }
+.auth-foot-user span { color: var(--text-soft); }
+.auth-foot .btn-plain { width: 100%; padding: 7px; font-size: 13px; }

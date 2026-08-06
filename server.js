@@ -3,7 +3,20 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { config, features } from './src/config.js';
-import { sessions, messages, groups, groupMessages, kbCategories, kbEntries, personaKb, groupKb } from './src/db.js';
+import { sessions, messages, groups, groupMessages, kbCategories, kbEntries, personaKb, groupKb, users, authSessions } from './src/db.js';
+import {
+  hashPassword,
+  verifyPassword,
+  newToken,
+  validateCredentials,
+  tokenFromReq,
+  setAuthCookie,
+  clearAuthCookie,
+  lockedFor,
+  recordFail,
+  clearFails,
+  SESSION_TTL_MS,
+} from './src/auth.js';
 import { updateEnvFile } from './src/env-file.js';
 import { getTempFile } from './src/files.js';
 import {
@@ -42,6 +55,76 @@ app.use('/stickers', express.static(join(__dirname, 'public', 'stickers')));
 const wrap = (fn) => (req, res) => Promise.resolve(fn(req, res)).catch((err) => {
   console.error(err);
   if (!res.headersSent) res.status(500).json({ error: err.message });
+});
+
+// ===== 登录鉴权 =====
+// 这四个接口在 requireAuth 之前注册，是唯一不需要登录的 /api 路由。
+// 说明：登录只是「进门」，业务表不带 user_id——进门后所有人设/会话/群聊/资料库仍共享可见。
+
+app.get('/api/auth/me', (req, res) => {
+  const user = authSessions.getUser(tokenFromReq(req));
+  res.json({ user: user || null, allowRegister: features.allowRegister });
+});
+
+// 登录成功的共同收尾：发令牌、种 cookie、回账号
+function grantSession(res, user) {
+  const token = newToken();
+  authSessions.create({ token, userId: user.id, expiresAt: Date.now() + SESSION_TTL_MS });
+  setAuthCookie(res, token);
+  res.json({ user: { id: user.id, username: user.username } });
+}
+
+app.post('/api/auth/register', wrap((req, res) => {
+  if (!features.allowRegister) return res.status(403).json({ error: '注册已关闭' });
+
+  const username = String(req.body?.username || '').trim();
+  const password = String(req.body?.password || '');
+  const invalid = validateCredentials(username, password);
+  if (invalid) return res.status(400).json({ error: invalid });
+
+  if (users.findByName(username)) return res.status(409).json({ error: '该账号已存在' });
+
+  const user = users.create({ username, passwordHash: hashPassword(password) });
+  grantSession(res, user); // 注册完直接登录，不用再填一遍
+}));
+
+app.post('/api/auth/login', wrap((req, res) => {
+  const username = String(req.body?.username || '').trim();
+  const password = String(req.body?.password || '');
+  if (!username || !password) return res.status(400).json({ error: '请填写账号与密码' });
+
+  const locked = lockedFor(username);
+  if (locked) {
+    return res.status(429).json({ error: `登录失败次数过多，请 ${locked} 秒后再试` });
+  }
+
+  const user = users.findByName(username);
+  // 账号不存在与密码错误回同一句，不告诉对方哪个账号真实存在
+  if (!user || !verifyPassword(password, user.password_hash)) {
+    recordFail(username);
+    return res.status(401).json({ error: '账号或密码错误' });
+  }
+
+  clearFails(username);
+  grantSession(res, user);
+}));
+
+app.post('/api/auth/logout', wrap((req, res) => {
+  const token = tokenFromReq(req);
+  if (token) authSessions.remove(token);
+  clearAuthCookie(res);
+  res.json({ ok: true });
+}));
+
+// 之后的所有 /api 路由都要求已登录。
+// 静态资源（dist 的 HTML/JS）不拦：登录界面本身就是 SPA 的一部分，藏 JS 没有安全收益，
+// 真正的门在这里。
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/')) return next();
+  const user = authSessions.getUser(tokenFromReq(req));
+  if (!user) return res.status(401).json({ error: '未登录' });
+  req.user = user;
+  next();
 });
 
 // ===== 能力查询 =====
@@ -465,5 +548,10 @@ app.listen(config.server.port, config.server.host, () => {
   console.log(`\n  AI 人格化聊天室已启动：http://${config.server.host}:${config.server.port}`);
   console.log(`  联网搜索：${features.webSearch ? '开启 (Tavily)' : '关闭（未配置 TAVILY_API_KEY）'}`);
   console.log(`  长期记忆：${features.longTermMemory ? '开启（摘要式）' : '关闭'}`);
-  console.log(`  表情包：${hasStickers ? `开启（${stickerCount} 个）` : '关闭（stickers.json 为空）'}\n`);
+  console.log(`  表情包：${hasStickers ? `开启（${stickerCount} 个）` : '关闭（stickers.json 为空）'}`);
+  const userCount = users.count();
+  console.log(
+    `  登录：${userCount ? `已有 ${userCount} 个账号` : '尚无账号，首次访问请先注册'}` +
+    `（注册入口${features.allowRegister ? '开放' : '已关闭'}）\n`
+  );
 });

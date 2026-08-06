@@ -67,6 +67,23 @@ db.exec(`
     created_at         INTEGER NOT NULL
   );
 
+  -- 登录账号。注意：这是「谁能进门」，不是数据归属——业务表都不带 user_id，
+  -- 登录后所有人设/会话/群聊/资料库仍是共享可见的。
+  CREATE TABLE IF NOT EXISTS users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at    INTEGER NOT NULL
+  );
+  -- 登录会话（令牌）。与「聊天会话」sessions 表毫无关系，别混。
+  -- 存表而非内存：dev:server 带 --watch，存内存每改一个文件就掉一次登录。
+  CREATE TABLE IF NOT EXISTS auth_sessions (
+    token      TEXT PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+  );
+
   -- 资料库：分类 → 条目；人设按条目授权可读
   CREATE TABLE IF NOT EXISTS kb_categories (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,6 +116,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_kb_entries_category ON kb_entries(category_id);
   CREATE INDEX IF NOT EXISTS idx_persona_kb_persona ON persona_kb(persona_id);
   CREATE INDEX IF NOT EXISTS idx_group_kb_group ON group_kb(group_id);
+  CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id);
 `);
 
 // 兼容旧库：groups 表若无 topic 列则补上（幂等，已存在会抛错，忽略即可）
@@ -435,5 +453,59 @@ export const groupKb = {
       .all(groupId);
   },
 };
+
+// ===== 登录账号 =====
+export const users = {
+  // 账号名唯一，登录与注册查重都走这里（SQLite 的 = 对 TEXT 默认区分大小写）
+  findByName(username) {
+    return db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+  },
+  get(id) {
+    return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  },
+  count() {
+    return db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
+  },
+  create({ username, passwordHash }) {
+    const info = db
+      .prepare('INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)')
+      .run(username, passwordHash, now());
+    return this.get(info.lastInsertRowid);
+  },
+};
+
+// ===== 登录会话（令牌）=====
+export const authSessions = {
+  create({ token, userId, expiresAt }) {
+    db.prepare(
+      'INSERT INTO auth_sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)'
+    ).run(token, userId, now(), expiresAt);
+  },
+  // 取令牌对应的账号；过期则顺手删掉并返回 undefined（惰性清理，同 files.js:sweep 的路子）
+  getUser(token) {
+    const row = db
+      .prepare(
+        `SELECT s.expires_at, u.id, u.username FROM auth_sessions s
+         JOIN users u ON u.id = s.user_id
+         WHERE s.token = ?`
+      )
+      .get(token);
+    if (!row) return undefined;
+    if (row.expires_at <= now()) {
+      this.remove(token);
+      return undefined;
+    }
+    return { id: row.id, username: row.username };
+  },
+  remove(token) {
+    db.prepare('DELETE FROM auth_sessions WHERE token = ?').run(token);
+  },
+  // 清掉所有已过期令牌（启动时跑一次，避免表无限增长）
+  sweepExpired() {
+    db.prepare('DELETE FROM auth_sessions WHERE expires_at <= ?').run(now());
+  },
+};
+
+authSessions.sweepExpired();
 
 export default db;

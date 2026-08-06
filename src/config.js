@@ -33,6 +33,8 @@ export const features = {
   webSearch: Boolean(config.tavily.apiKey),
   // 摘要式长期记忆：默认开启，可用 ENABLE_LONG_TERM=false 关闭
   longTermMemory: (process.env.ENABLE_LONG_TERM || 'true').toLowerCase() !== 'false',
+  // 开放注册：默认开启。服务只监听本机时风险低；若要放到内网，设 false 关掉注册入口
+  allowRegister: (process.env.ALLOW_REGISTER || 'true').toLowerCase() !== 'false',
 };
 
 export function assertChatConfig() {

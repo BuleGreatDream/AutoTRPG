@@ -4,6 +4,7 @@
 // 暴露 send(sticker?) 给 Composer.vue 调用；新消息通过回调 onPush 推给父组件，
 // 父组件只管塞进 chat.messages[] 并滚动——不侵入流控逻辑。
 import { chat, chatKey, currentChatKey, isSending, loadMessagesForSession, loadMessagesForGroup } from '../stores/chat.js';
+import { handleUnauthorized } from '../stores/auth.js';
 import { personaSpeaker } from './useAvatar.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -120,6 +121,8 @@ export function useChatStream(onPush) {
       // 后端校验失败（400/404）等非流式响应：body 是 JSON 而不是 SSE，
       // 直接当错误抛出，否则下面的解析会静默读不到任何 event，界面一句话都不出。
       if (!res.ok) {
+        // 这里是裸 fetch，不经 api 层的 401 拦截，得自己退回登录页
+        if (res.status === 401) handleUnauthorized();
         let detail = `HTTP ${res.status}`;
         try {
           const body = await res.json();

@@ -29,6 +29,12 @@
 - AI 可通过 `create_file` 工具把内容生成为可下载的 **txt / md** 文件(仅在用户明确要求时触发)。
 - 文件为临时文件(2 小时过期清理),对话内以下载卡片呈现。
 
+### 登录
+- 账号密码登录,首次访问先注册。密码用 scrypt 加盐哈希存储,登录态是 httpOnly cookie(有效期 30 天)。
+- 登录失败 5 次锁定 5 分钟,防口令爆破。
+- **登录只是「进门」**:所有账号共享同一份人设卡/会话/群聊/资料库,不做按账号的数据隔离。
+- 可用 `ALLOW_REGISTER=false` 关掉注册入口(已有账号仍能登录)。
+
 ### 设置
 - 运行时切换大模型 `Base URL / 模型名 / API Key`,写回 `.env` 持久化且**立即生效无需重启**。
 
@@ -49,6 +55,10 @@ cp .env.example .env   # Windows: copy .env.example .env
 npm run build          # 构建前端
 npm start              # 启动服务（默认 http://127.0.0.1:3001）
 ```
+
+首次打开会看到登录界面，点「注册」创建第一个账号即可进入。
+
+> 若修改 `.env` 里的 `PORT`，记得把 `vite.config.js` 里 dev 代理的目标端口一起改，否则 `npm run dev:web` 的接口请求会打空。
 
 ### 开发模式
 
@@ -72,6 +82,7 @@ npm run dev:web        # 前端 5173，Vite dev server + HMR
 | `CHAT_MODEL` | 对话模型名 |
 | `TAVILY_API_KEY` | Tavily 密钥(不配则联网搜索关闭) |
 | `ENABLE_LONG_TERM` | 摘要式长期记忆开关,默认 `true` |
+| `ALLOW_REGISTER` | 是否开放注册入口,默认 `true` |
 | `SHORT_TERM_MESSAGES` | 短期记忆注入的最近消息条数(默认 20) |
 | `PORT` / `HOST` | 服务监听端口与地址(默认 `3001` / `127.0.0.1`) |
 
@@ -99,7 +110,7 @@ npm run dev:web        # 前端 5173，Vite dev server + HMR
 ## 安全提示
 
 - 密钥仅存于 `.env`,已在 `.gitignore` 忽略,不会提交到版本库。请勿分享 `.env` 本身。
-- 服务默认监听 `127.0.0.1`,**无鉴权,仅供本机使用**。若要暴露到公网/局域网,请自行加反向代理 + 认证层。
+- 服务有账号密码登录,但默认监听 `127.0.0.1`,**仅供本机使用**。登录 cookie 未设 `Secure`(本机是明文 HTTP,设了浏览器就不发送了),因此**明文 HTTP 下令牌可被嗅探**——要暴露到公网/局域网,请自行加反向代理 + HTTPS,并给 cookie 补上 `Secure`。
 - 联网搜索返回的网页内容、资料库内容均视为参考资料。
 
 ## 目录结构
@@ -108,6 +119,7 @@ npm run dev:web        # 前端 5173，Vite dev server + HMR
 ├── server.js              Express 入口 + 所有 HTTP/SSE 路由
 ├── src/
 │   ├── config.js          配置与能力开关
+│   ├── auth.js            密码哈希 / 令牌 / cookie / 登录限流
 │   ├── db.js              SQLite 建表与各表 DAO
 │   ├── llm.js             OpenAI 兼容客户端 + tool-call 循环
 │   ├── reply.js           单个成员逐句流式回应(1v1 与群聊共用)
@@ -129,11 +141,11 @@ npm run dev:web        # 前端 5173，Vite dev server + HMR
 │   └── src/
 │       ├── App.vue        三栏骨架
 │       ├── api/           API 封装 + 路径表
-│       ├── stores/        响应式状态（chat / personas / kb / settings）
+│       ├── stores/        响应式状态（chat / personas / kb / settings / auth）
 │       ├── composables/   useChatStream（SSE 流式）/ useAvatar
 │       ├── components/    NavRail / AvatarImg / MessageBubble / KbAuthList
-│       ├── views/         各板块中栏 + 主区 + 弹窗
-│       └── styles/        CSS 按 base / layout / chat / forms / modal 拆分
+│       ├── views/         各板块中栏 + 主区 + 弹窗 + LoginView（登录/注册）
+│       └── styles/        CSS 按 base / layout / chat / forms / modal / auth 拆分
 ├── dist/                  构建产物（npm run build → Express 托管）
 ├── vite.config.js         Vite 配置（root:web，dev 代理到 3001）
 └── public/
